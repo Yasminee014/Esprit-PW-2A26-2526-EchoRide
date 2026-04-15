@@ -1,91 +1,34 @@
-# Module Réclamations — EcoRide
-## Structure MVC + POO + PDO
+# EcoRide – Système de Gestion des Réclamations
 
-```
-ecoride/
-├── Model/
-│   ├── Database.php              ← Connexion PDO Singleton
-│   └── ReclamationModel.php      ← CRUD complet (PDO)
-│
-├── Controller/
-│   ├── ReclamationController.php       ← BackOffice (Admin)
-│   └── ReclamationFrontController.php  ← FrontOffice (Utilisateur)
-│
-├── View/
-│   ├── backoffice/
-│   │   └── admin_reclamations.php  ← Vue admin (dashboard)
-│   └── frontoffice/
-│       └── mes_reclamations.php    ← Vue utilisateur
-│
-└── reclamations.sql               ← Script SQL (table + données test)
-```
+## Module Réclamations
 
-## Contraintes respectées
+Ce module permet de gérer les réclamations des utilisateurs.
 
-| Contrainte | Statut |
-|---|---|
-| ✅ Pas de validation HTML5 (`required`, `pattern`…) | Validation JS pure + PHP serveur |
-| ✅ Architecture MVC | Model / View / Controller séparés |
-| ✅ Programmation Orientée Objet | Classes, constructeurs, méthodes |
-| ✅ PDO obligatoire | Singleton PDO, requêtes préparées |
-| ✅ Contrôle de saisie fonctionnel | JS côté client + PHP côté serveur |
-| ✅ FrontOffice + BackOffice | Deux interfaces distinctes |
-| ✅ CRUD complet | Create / Read / Update / Delete |
+### Fonctionnalités
 
-## Intégration dans le projet
+- ✅ CRUD complet (Créer, Lire, Modifier, Supprimer)
+- ✅ BackOffice pour l'administrateur
+- ✅ FrontOffice pour les utilisateurs
+- ✅ Sécurisé par mot de passe (admin123)
 
-### 1. Importer la table SQL
-```sql
--- Dans phpMyAdmin ou CLI MySQL :
-SOURCE /chemin/vers/reclamations.sql;
-```
+### Technologies
 
-### 2. Configurer la connexion dans `Model/Database.php`
-```php
-$host   = 'localhost';
-$dbname = 'ecoride';    // ← votre base
-$user   = 'root';       // ← votre utilisateur
-$pass   = '';           // ← votre mot de passe
-```
+- PHP
+- MySQL (PDO)
+- HTML/CSS
+- JavaScript
 
-### 3. Ajouter les liens dans la navigation
-- **Sidebar admin** : lien vers `admin_reclamations.php`
-- **Navbar frontoffice** : lien vers `mes_reclamations.php`
+### Installation
 
-### 4. Point d'entrée BackOffice
-Créer `admin_reclamations.php` à la racine du backoffice :
-```php
-<?php
-session_start();
-if (empty($_SESSION['is_admin'])) { header('Location: login.php'); exit; }
-require_once '../../Controller/ReclamationController.php';
-(new ReclamationController())->handleRequest();
-```
+1. Importer `reclamations.sql` dans phpMyAdmin
+2. Configurer la base de données dans `Database.php`
+3. Lancer le projet : `http://localhost/ecoride_reclamations_mvc/index.php`
 
-### 5. Point d'entrée FrontOffice
-Créer `mes_reclamations.php` à la racine du frontoffice :
-```php
-<?php
-session_start();
-require_once '../../Controller/ReclamationFrontController.php';
-(new ReclamationFrontController())->handleRequest();
-```
+### Accès
 
-## Fonctionnalités
+- Mode Utilisateur : par défaut
+- Mode Admin : cliquer sur "Mode Admin" → mot de passe : `admin123`
 
-### BackOffice (Admin)
-- 📊 Tableau de bord avec compteurs par statut
-- 🔍 Recherche en temps réel (titre, utilisateur)
-- 🔽 Filtres : statut, priorité, catégorie
-- ➕ Ajouter une réclamation (modale)
-- ✏️ Modifier une réclamation (modale)
-- 👁️ Voir le détail et répondre (modale)
-- 🔄 Changer le statut directement dans la table
-- 🗑️ Supprimer une réclamation
+---
 
-### FrontOffice (Utilisateur)
-- 📋 Liste de ses réclamations avec statuts et réponses admin
-- ➕ Formulaire de soumission (colonne droite sticky)
-- ✅ Validation JS complète sans HTML5
-- 📊 Compteur de caractères sur la description
-- 🎨 Design cohérent avec le reste de l'application EcoRide
+Développé par Yasmine - Esprit 2026
