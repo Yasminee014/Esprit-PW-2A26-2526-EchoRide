@@ -1,0 +1,1081 @@
+<?php
+declare(strict_types=1);
+
+require_once __DIR__ . '/../../modele/Database.php';
+require_once __DIR__ . '/../../modele/LostFoundRepository.php';
+
+$pdo = Database::getConnection();
+$repository = new LostFoundRepository($pdo);
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+  $action = trim((string) ($_POST['action'] ?? ''));
+
+  if ($action === 'create_declaration') {
+    $repository->create([
+      'titre' => trim((string) ($_POST['titre'] ?? 'Declaration')),
+      'description' => trim((string) ($_POST['description'] ?? '')),
+      'categorie' => trim((string) ($_POST['categorie'] ?? 'autre')),
+      'lieu_perte' => null,
+      'photo_url' => trim((string) ($_POST['photo_url'] ?? '')),
+      'date_perte' => trim((string) ($_POST['date_perte'] ?? '')),
+      'statut' => trim((string) ($_POST['statut'] ?? 'perdu')),
+      'trajet_id' => (int) ($_POST['trajet_id'] ?? 0),
+      'passager_id' => isset($_POST['passager_id']) ? (int) $_POST['passager_id'] : null,
+      'anonyme_nom' => trim((string) ($_POST['anonyme_nom'] ?? '')),
+      'user_id' => isset($_POST['passager_id']) ? (int) $_POST['passager_id'] : null,
+      'user_nom' => null,
+    ]);
+  }
+
+  if ($action === 'delete_declaration') {
+    $stmt = $pdo->prepare('DELETE FROM declarations WHERE id = :id');
+    $stmt->execute([':id' => (int) ($_POST['id'] ?? 0)]);
+  }
+
+  if ($action === 'update_declaration') {
+    $stmt = $pdo->prepare(
+      'UPDATE declarations
+       SET description = :description,
+         categorie = :categorie,
+         statut = :statut,
+         trajet_id = :trajet_id
+       WHERE id = :id'
+    );
+    $stmt->execute([
+      ':description' => trim((string) ($_POST['description'] ?? '')),
+      ':categorie' => trim((string) ($_POST['categorie'] ?? 'autre')),
+      ':statut' => trim((string) ($_POST['statut'] ?? 'perdu')),
+      ':trajet_id' => (int) ($_POST['trajet_id'] ?? 0),
+      ':id' => (int) ($_POST['id'] ?? 0),
+    ]);
+  }
+
+  if ($action === 'mark_restitue') {
+    $repository->updateStatus((int) ($_POST['id'] ?? 0), 'restitue');
+  }
+
+  if ($action === 'add_comment') {
+    $repository->addComment(
+      (int) ($_POST['declaration_id'] ?? 0),
+      isset($_POST['conducteur_id']) ? (int) $_POST['conducteur_id'] : null,
+      null,
+      trim((string) ($_POST['message'] ?? '')),
+      null
+    );
+  }
+
+  header('Location: lostfound_admin.php');
+  exit;
+}
+
+$rawDeclarations = $repository->findAll();
+$initialObjets = array_map(
+  static fn(array $row): array => [
+    'id' => (int) $row['id'],
+    'description' => (string) ($row['description'] ?? ''),
+    'categorie' => (string) ($row['categorie'] ?? ''),
+    'photo_url' => (string) ($row['photo_url'] ?? ''),
+    'date_perte' => (string) ($row['date_perte'] ?? ''),
+    'statut' => (string) ($row['statut'] ?? 'perdu'),
+    'trajet_id' => (int) ($row['trajet_id'] ?? 0),
+    'passager_id' => isset($row['passager_id']) ? (int) $row['passager_id'] : null,
+    'anonyme_nom' => $row['anonyme_nom'] ?? null,
+  ],
+  $rawDeclarations
+);
+
+$commentStmt = $pdo->query('SELECT id, declaration_id, user_id, message, created_at FROM commentaires ORDER BY id DESC');
+$rawCommentaires = $commentStmt->fetchAll(PDO::FETCH_ASSOC);
+$initialSignalements = array_map(
+  static fn(array $row): array => [
+    'id' => (int) $row['id'],
+    'message' => (string) ($row['message'] ?? ''),
+    'date_signalement' => (string) ($row['created_at'] ?? ''),
+    'conducteur_id' => isset($row['user_id']) ? (int) $row['user_id'] : 0,
+    'objet_id' => (int) ($row['declaration_id'] ?? 0),
+  ],
+  $rawCommentaires
+);
+?>
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Administration - Objets perdus - EcoRide</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --blue:#1976D2;--blue-light:#61B3FA;
+  --dark:#0A1628;--dark2:#0D1F3A;--dark3:#0F3B6E;
+  --white:#F4F5F7;--grey:#A7A9AC;
+  --green:#27ae60;--red:#e74c3c;--yellow:#f1c40f;--orange:#e67e22;
+}
+body{font-family:'Poppins','Segoe UI',sans-serif;background:linear-gradient(135deg,var(--dark) 0%,var(--dark2) 100%);color:#fff;min-height:100vh;}
+body{position:relative;overflow-x:hidden;}
+body::before{content:"";position:fixed;inset:0;background:url('https://images.unsplash.com/photo-1511919884226-fd3cad34687c?auto=format&fit=crop&w=2000&q=80') center/cover no-repeat;opacity:.32;z-index:-2;pointer-events:none;}
+body::after{content:"";position:fixed;inset:0;background:linear-gradient(130deg,rgba(8,20,38,.88) 0%,rgba(12,31,58,.84) 45%,rgba(8,20,38,.9) 100%);z-index:-1;pointer-events:none;}
+
+/* SIDEBAR */
+.wrap{display:flex;min-height:100vh;}
+.sidebar{width:260px;background:linear-gradient(180deg,var(--blue) 0%,var(--dark3) 100%);padding:1.5rem 1rem;position:fixed;height:100vh;overflow-y:auto;box-shadow:4px 0 20px rgba(0,0,0,.4);z-index:50;border-right:1px solid rgba(97,179,250,.18);}
+.logo{text-align:center;margin-bottom:1.5rem;padding-bottom:1rem;border-bottom:2px solid var(--blue-light);}
+.logo i{font-size:40px;color:var(--blue-light);display:block;margin-bottom:6px;}
+.logo h2{background:linear-gradient(135deg,#fff,var(--blue-light));-webkit-background-clip:text;background-clip:text;color:transparent;font-size:1.35rem;font-weight:700;}
+.logo p{color:var(--grey);font-size:.72rem;letter-spacing:1px;text-transform:uppercase;}
+.nav-section{color:var(--grey);font-size:.68rem;text-transform:uppercase;letter-spacing:1.5px;padding:.7rem 1rem .25rem;font-weight:600;}
+nav ul{list-style:none;}
+nav ul li{margin-bottom:.25rem;}
+nav ul li a{display:flex;align-items:center;gap:11px;padding:.72rem 1rem;color:#fff;text-decoration:none;border-radius:10px;transition:all .25s;font-size:.88rem;}
+nav ul li a i{width:18px;color:var(--blue-light);font-size:.9rem;}
+nav ul li a:hover,nav ul li a.active{background:rgba(255,255,255,.15);border-left:3px solid var(--blue-light);}
+nav ul li a:hover i,nav ul li a.active i{color:#fff;}
+.sidebar-sep{border:none;border-top:1px solid rgba(97,179,250,.2);margin:.75rem 0;}
+
+/* MAIN */
+.main{flex:1;margin-left:260px;padding:1.6rem;}
+
+/* TOPBAR */
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:.7rem;flex-wrap:wrap;margin-bottom:1.6rem;padding-bottom:1rem;border-bottom:1px solid rgba(97,179,250,.2);}
+.topbar h1{font-size:1.5rem;display:flex;align-items:center;gap:9px;color:var(--white);}
+.topbar h1 i{color:var(--blue-light);}
+.pill{background:rgba(255,255,255,.08);border:1px solid rgba(97,179,250,.3);color:#fff;padding:.4rem .9rem;border-radius:20px;font-size:.8rem;display:inline-flex;align-items:center;gap:6px;}
+.pill-user{background:rgba(255,255,255,.08);border:1px solid rgba(97,179,250,.3);color:#fff;padding:.4rem .9rem;border-radius:20px;font-size:.8rem;display:inline-flex;align-items:center;gap:6px;text-decoration:none;transition:all .25s;}
+.pill-user:hover{background:rgba(25,118,210,.3);border-color:#61b3fa;color:#61b3fa;}
+
+/* STATS */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin-bottom:1.6rem;}
+.stat{background:rgba(255,255,255,.06);border:1px solid rgba(97,179,250,.2);border-radius:14px;padding:1.2rem;text-align:center;transition:all .3s;backdrop-filter:blur(3px);}
+.stat:hover{transform:translateY(-4px);border-color:var(--blue-light);box-shadow:0 8px 22px rgba(25,118,210,.18);}
+.stat i{font-size:1.8rem;color:var(--blue-light);margin-bottom:.35rem;display:block;}
+.stat .num{font-size:2rem;font-weight:700;background:linear-gradient(135deg,var(--blue-light),#fff);-webkit-background-clip:text;background-clip:text;color:transparent;}
+.stat .lbl{color:var(--grey);font-size:.75rem;margin-top:.2rem;}
+
+/* TOOLBAR */
+.toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:.7rem;}
+.search-box{position:relative;flex:1;min-width:220px;max-width:360px;}
+.search-box input{width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(97,179,250,.3);color:#fff;padding:.5rem .9rem .5rem 2.2rem;border-radius:18px;font-size:.84rem;outline:none;transition:all .25s;font-family:inherit;backdrop-filter:blur(2px);}
+.search-box input::placeholder{color:var(--grey);}
+.search-box input:focus{border-color:var(--blue-light);background:rgba(97,179,250,.08);}
+.search-box i{position:absolute;left:.75rem;top:50%;transform:translateY(-50%);color:var(--grey);font-size:.82rem;}
+
+/* BUTTONS */
+.btn{padding:.5rem 1.1rem;border-radius:18px;font-size:.84rem;font-family:inherit;cursor:pointer;border:none;display:inline-flex;align-items:center;gap:6px;transition:all .25s;font-weight:500;text-decoration:none;}
+.btn-primary{background:var(--blue);color:#fff;}
+.btn-primary:hover{background:#1565C0;transform:translateY(-1px);}
+.btn-outline{background:rgba(255,255,255,.08);border:1px solid rgba(97,179,250,.3);color:#fff;}
+.btn-outline:hover{background:rgba(25,118,210,.25);border-color:var(--blue-light);}
+.btn-danger{background:rgba(231,76,60,.18);border:1px solid rgba(231,76,60,.32);color:#e74c3c;}
+.btn-danger:hover{background:rgba(231,76,60,.28);}
+.btn-warning{background:rgba(241,196,15,.17);border:1px solid rgba(241,196,15,.32);color:#f1c40f;}
+.btn-warning:hover{background:rgba(241,196,15,.25);}
+
+/* FILTERS */
+.filters{display:flex;gap:.5rem;margin-bottom:1rem;flex-wrap:wrap;align-items:center;}
+.st-sel{background:rgba(255,255,255,.08);border:1px solid rgba(97,179,250,.25);color:#fff;padding:.45rem .62rem;border-radius:9px;font-size:.79rem;cursor:pointer;outline:none;font-family:inherit;}
+.st-sel option{background:#0D1F3A;}
+
+/* TABLE */
+.tbl-wrap{background:rgba(16,39,70,.44);border-radius:14px;overflow:hidden;border:1px solid rgba(97,179,250,.16);backdrop-filter:blur(2px);}
+table{width:100%;border-collapse:collapse;min-width:980px;}
+thead{background:rgba(25,118,210,.22);}
+thead th{padding:.85rem 1rem;text-align:left;font-size:.76rem;text-transform:uppercase;letter-spacing:.7px;color:var(--blue-light);font-weight:600;}
+tbody tr{border-bottom:1px solid rgba(255,255,255,.04);transition:background .18s;}
+tbody tr:last-child{border-bottom:none;}
+tbody tr:hover{background:rgba(97,179,250,.05);}
+tbody td{padding:.8rem 1rem;font-size:.87rem;vertical-align:middle;}
+code{color:var(--blue-light);font-family:monospace;font-size:.84rem;}
+
+/* BADGES */
+.badge{display:inline-block;padding:.18rem .65rem;border-radius:11px;font-size:.73rem;font-weight:600;}
+.b-perdu{background:rgba(231,76,60,.17);color:#e74c3c;border:1px solid rgba(231,76,60,.32);}
+.b-retrouve{background:rgba(241,196,15,.17);color:#f1c40f;border:1px solid rgba(241,196,15,.32);}
+.b-restitue{background:rgba(39,174,96,.17);color:#27ae60;border:1px solid rgba(39,174,96,.32);}
+.b-cat{background:rgba(25,118,210,.22);color:var(--blue-light);border:1px solid rgba(97,179,250,.35);}
+
+/* ACTIONS */
+.acts{display:flex;gap:5px;align-items:center;}
+.ic{width:30px;height:30px;border:none;border-radius:7px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:.82rem;transition:all .22s;}
+.ic:hover{transform:scale(1.12);}
+.ic-view{background:rgba(25,118,210,.2);color:var(--blue-light);}
+.ic-del{background:rgba(231,76,60,.18);color:#e74c3c;}
+
+/* EMPTY */
+.empty{text-align:center;padding:2.5rem;color:var(--grey);}
+.empty i{font-size:2.2rem;color:rgba(97,179,250,.22);margin-bottom:.7rem;display:block;}
+
+/* MODAL */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);backdrop-filter:blur(3px);z-index:999;align-items:center;justify-content:center;padding:1rem;}
+.overlay.open{display:flex;}
+.modal{background:linear-gradient(145deg,#0D1F3A,#122A4A);border:1px solid rgba(97,179,250,.22);border-radius:18px;padding:1.35rem;width:95%;max-width:620px;max-height:92vh;overflow-y:auto;animation:mIn .28s ease;}
+@keyframes mIn{from{opacity:0;transform:translateY(-18px)}to{opacity:1;transform:translateY(0)}}
+.modal h2{font-size:1.15rem;margin-bottom:1rem;display:flex;align-items:center;gap:9px;color:var(--white);}
+.modal h2 i{color:var(--blue-light);}
+.fgrid{display:grid;grid-template-columns:1fr 1fr;gap:.9rem;margin-bottom:.9rem;}
+.fg{margin-bottom:.9rem;}
+.fg label{display:block;font-size:.76rem;color:var(--grey);margin-bottom:.32rem;text-transform:uppercase;letter-spacing:.5px;}
+.fg input,.fg select,.fg textarea{width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(97,179,250,.22);color:#fff;padding:.55rem .8rem;border-radius:9px;font-size:.86rem;font-family:inherit;outline:none;transition:all .22s;}
+.fg textarea{min-height:90px;resize:vertical;}
+.fg input:focus,.fg select:focus,.fg textarea:focus{border-color:var(--blue-light);}
+.fg input::placeholder,.fg textarea::placeholder{color:var(--grey);}
+.fg select option{background:#0D1F3A;}
+.chk{display:flex;align-items:center;gap:7px;margin-top:.4rem;}
+.chk input{width:17px;height:17px;cursor:pointer;accent-color:var(--blue);}
+.chk label{text-transform:none;letter-spacing:0;color:#fff;font-size:.86rem;margin:0;}
+.mfooter{display:flex;justify-content:flex-end;gap:.7rem;margin-top:1.2rem;flex-wrap:wrap;}
+.section{margin-top:1rem;padding-top:1rem;border-top:1px solid rgba(97,179,250,.2);}
+.section h3{font-size:.95rem;color:var(--blue-light);margin-bottom:.65rem;display:flex;align-items:center;gap:7px;}
+.comment-list{display:flex;flex-direction:column;gap:.55rem;max-height:200px;overflow-y:auto;padding-right:.2rem;}
+.comment-item{background:rgba(255,255,255,.06);border:1px solid rgba(97,179,250,.18);border-radius:10px;padding:.65rem .75rem;}
+.comment-meta{font-size:.72rem;color:var(--grey);margin-bottom:.2rem;}
+.comment-msg{font-size:.84rem;line-height:1.4;}
+.ia-box{background:rgba(25,118,210,.14);border:1px solid rgba(97,179,250,.28);border-radius:10px;padding:.68rem .78rem;color:#cfe8ff;font-size:.84rem;line-height:1.4;}
+.form-note{font-size:.72rem;color:var(--grey);margin-top:.22rem;}
+.form-error{display:none;background:rgba(231,76,60,.16);border:1px solid rgba(231,76,60,.35);color:#ffd6d2;padding:.55rem .75rem;border-radius:9px;margin-bottom:.8rem;font-size:.8rem;}
+.form-error.show{display:block;}
+.field-error{display:none;color:#ffb3ab;font-size:.74rem;margin-top:.3rem;}
+.field-error.show{display:block;}
+.input-invalid{border-color:#e74c3c !important;box-shadow:0 0 0 2px rgba(231,76,60,.16);}
+.table-scroll{overflow-x:auto;}
+
+/* RESPONSIVE */
+@media (max-width:980px){
+  .sidebar{position:relative;width:100%;height:auto;}
+  .main{margin-left:0;}
+  .wrap{flex-direction:column;}
+}
+@media (max-width:640px){
+  .fgrid{grid-template-columns:1fr;}
+  .modal{padding:1rem;}
+  .topbar h1{font-size:1.22rem;}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <aside class="sidebar">
+    <div class="logo">
+      <i class="fas fa-leaf"></i>
+      <h2>EcoRide</h2>
+      <p>Administration</p>
+    </div>
+    <nav>
+      <div class="nav-section">Gestion</div>
+      <ul>
+        <li><a href="#"><i class="fas fa-user"></i> User</a></li>
+        <li><a href="#"><i class="fas fa-car"></i> Vehicules</a></li>
+        <li><a href="#"><i class="fas fa-route"></i> Trajets</a></li>
+        <li><a href="#"><i class="fas fa-calendar-days"></i> Evenement</a></li>
+        <li><a href="#" class="active"><i class="fas fa-box-open"></i> Objet_perdu</a></li>
+        <li><a href="#"><i class="fas fa-comment-dots"></i> Reclamation</a></li>
+      </ul>
+      <hr class="sidebar-sep">
+      <ul>
+        <li><a href="#"><i class="fas fa-sign-out-alt"></i> Deconnexion</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <h1><i class="fas fa-box-open"></i> Gestion des objets perdus</h1>
+      <a href="../Front%20office/lostfound_front.php" class="pill-user"><i class="fas fa-user"></i> Espace utilisateur</a>
+      <span class="pill"><i class="fas fa-shield-alt"></i> Admin</span>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><i class="fas fa-inbox"></i><div class="num" id="statTotal">0</div><div class="lbl">Total declarations</div></div>
+      <div class="stat"><i class="fas fa-triangle-exclamation"></i><div class="num" id="statPerdu">0</div><div class="lbl">Objets perdus</div></div>
+      <div class="stat"><i class="fas fa-magnifying-glass-location"></i><div class="num" id="statRetrouve">0</div><div class="lbl">Objets retrouves</div></div>
+      <div class="stat"><i class="fas fa-handshake"></i><div class="num" id="statRestitue">0</div><div class="lbl">Objets restitues</div></div>
+    </div>
+
+    <div class="toolbar">
+      <div class="search-box">
+        <i class="fas fa-search"></i>
+        <input type="text" id="searchInput" placeholder="Rechercher declaration, objet, declarant...">
+      </div>
+      <button class="btn btn-primary" id="openAddModalBtn"><i class="fas fa-plus"></i> Ajouter une declaration</button>
+    </div>
+
+    <div class="filters">
+      <select id="filterStatut" class="st-sel">
+        <option value="tous">Statut : Tous</option>
+        <option value="perdu">Perdu</option>
+        <option value="retrouve">Retrouve</option>
+        <option value="restitue">Restitue</option>
+      </select>
+      <select id="filterCategorie" class="st-sel">
+        <option value="toutes">Categorie : Toutes</option>
+        <option value="electronique">Electronique</option>
+        <option value="vetement">Vetement</option>
+        <option value="document">Document</option>
+        <option value="bagage">Bagage</option>
+        <option value="autre">Autre</option>
+      </select>
+      <select id="filterDeclarant" class="st-sel">
+        <option value="tous">Declarant : Tous</option>
+        <option value="inscrit">Inscrit</option>
+        <option value="anonyme">Anonyme</option>
+      </select>
+    </div>
+
+    <div class="tbl-wrap">
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Declarant</th>
+              <th>Trajet</th>
+              <th>Categorie</th>
+              <th>Description</th>
+              <th>Statut</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="declarationsTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="overlay" id="addModal">
+  <div class="modal">
+    <h2><i class="fas fa-plus-circle"></i> Ajouter une declaration</h2>
+    <form id="addForm" novalidate>
+      <div id="addFormError" class="form-error" aria-live="polite"></div>
+      <div class="fgrid">
+        <div class="fg">
+          <label for="addCategorie">Categorie</label>
+          <select id="addCategorie" name="categorie">
+            <option value="">Choisir...</option>
+            <option value="electronique">Electronique</option>
+            <option value="vetement">Vetement</option>
+            <option value="document">Document</option>
+            <option value="bagage">Bagage</option>
+            <option value="autre">Autre</option>
+          </select>
+          <div id="addCategorieError" class="field-error" aria-live="polite"></div>
+        </div>
+        <div class="fg">
+          <label for="addStatut">Statut</label>
+          <select id="addStatut" name="statut">
+            <option value="perdu">Perdu</option>
+            <option value="retrouve">Retrouve</option>
+            <option value="restitue">Restitue</option>
+          </select>
+          <div id="addStatutError" class="field-error" aria-live="polite"></div>
+        </div>
+      </div>
+      <div class="fgrid">
+        <div class="fg">
+          <label for="addTrajet">Trajet ID</label>
+          <input id="addTrajet" name="trajet_id" type="text" inputmode="numeric" placeholder="Ex: 202">
+          <div id="addTrajetError" class="field-error" aria-live="polite"></div>
+        </div>
+      </div>
+      <div class="fg">
+        <label for="addDescription">Description</label>
+        <textarea id="addDescription" name="description" placeholder="Ex: Sac noir oublie sur le siege arriere"></textarea>
+        <div id="addDescriptionError" class="field-error" aria-live="polite"></div>
+      </div>
+      <div class="fgrid">
+        <div class="fg">
+          <label for="addPhoto">Photo (image)</label>
+          <input id="addPhoto" type="file" accept="image/png,image/jpeg,image/webp,image/gif">
+          <div class="form-note">Formats acceptes: JPG, PNG, WEBP, GIF (max 2 Mo)</div>
+          <div id="addPhotoError" class="field-error" aria-live="polite"></div>
+        </div>
+        <div class="fg">
+          <label for="addDate">Date de perte</label>
+          <input id="addDate" type="date">
+          <div id="addDateError" class="field-error" aria-live="polite"></div>
+        </div>
+      </div>
+      <div class="chk">
+        <input id="addAnonymous" name="declaration_anonyme" value="1" type="checkbox">
+        <label for="addAnonymous">Declaration anonyme</label>
+      </div>
+      <div class="fg" id="addAnonNameWrap" style="display:none;">
+        <label for="addAnonName">Nom externe</label>
+        <input id="addAnonName" name="anonyme_nom" type="text" placeholder="Nom de la personne externe">
+        <div id="addAnonNameError" class="field-error" aria-live="polite"></div>
+      </div>
+      <div class="form-note">Si non anonyme, un passager_id simule sera attribue automatiquement.</div>
+      <div class="mfooter">
+        <button type="button" class="btn btn-outline" data-close="addModal">Annuler</button>
+        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Enregistrer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="overlay" id="detailModal">
+  <div class="modal">
+    <h2><i class="fas fa-circle-info"></i> Details de la declaration</h2>
+    <form id="detailForm">
+      <div class="fgrid">
+        <div class="fg">
+          <label for="detailId">ID</label>
+          <input id="detailId" type="text" readonly>
+        </div>
+        <div class="fg">
+          <label for="detailTrajet">Trajet ID</label>
+          <input id="detailTrajet" type="text" inputmode="numeric">
+        </div>
+      </div>
+      <div class="fgrid">
+        <div class="fg">
+          <label for="detailCategorie">Categorie</label>
+          <select id="detailCategorie">
+            <option value="electronique">Electronique</option>
+            <option value="vetement">Vetement</option>
+            <option value="document">Document</option>
+            <option value="bagage">Bagage</option>
+            <option value="autre">Autre</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label for="detailStatut">Statut</label>
+          <select id="detailStatut">
+            <option value="perdu">Perdu</option>
+            <option value="retrouve">Retrouve</option>
+            <option value="restitue">Restitue</option>
+          </select>
+        </div>
+      </div>
+      <div class="fg">
+        <label for="detailDescription">Description</label>
+        <textarea id="detailDescription"></textarea>
+      </div>
+
+      <div class="section">
+        <h3><i class="fas fa-comments"></i> Commentaires</h3>
+        <div class="comment-list" id="commentsList"></div>
+        <div class="fgrid" style="margin-top:.7rem;">
+          <div class="fg">
+            <label for="commentConducteurId">Conducteur ID</label>
+            <input id="commentConducteurId" type="text" inputmode="numeric" placeholder="Ex: 31">
+          </div>
+          <div class="fg">
+            <label for="commentMessage">Nouveau commentaire</label>
+            <input id="commentMessage" type="text" placeholder="Ex: Sac retrouve cote conducteur">
+          </div>
+        </div>
+        <button type="button" class="btn btn-outline" id="addCommentBtn"><i class="fas fa-plus"></i> Ajouter commentaire</button>
+      </div>
+
+      <div class="section">
+        <h3><i class="fas fa-robot"></i> IA commentaires</h3>
+        <div class="ia-box" id="iaSuggestion">Aucun commentaire pour le moment.</div>
+      </div>
+
+      <div class="mfooter">
+        <button type="button" class="btn btn-outline" data-close="detailModal">Fermer</button>
+        <button type="submit" class="btn btn-primary"><i class="fas fa-pen"></i> Modifier</button>
+        <button type="button" class="btn btn-warning" id="markRestitueBtn"><i class="fas fa-handshake"></i> Restituer</button>
+        <button type="button" class="btn btn-danger" id="deleteFromModalBtn"><i class="fas fa-trash"></i> Supprimer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+const OBJETS_KEY = 'declarations';
+const SIGNALEMENTS_KEY = 'commentaires';
+const INITIAL_OBJETS = <?php echo json_encode($initialObjets, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+const INITIAL_SIGNALEMENTS = <?php echo json_encode($initialSignalements, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+
+const trajetMap = {
+  201: 'Paris -> Lyon',
+  202: 'Lille -> Bruxelles',
+  203: 'Marseille -> Nice',
+  204: 'Bordeaux -> Toulouse',
+  205: 'Nantes -> Rennes'
+};
+
+const passagersMap = {
+  1: 'Sophie Martin',
+  2: 'Youssef Belaid',
+  3: 'Camille Bernard',
+  4: 'Antoine Girard',
+  5: 'Lea Martin'
+};
+
+let objets = [];
+let signalements = [];
+let currentDetailId = null;
+
+const els = {
+  tbody: document.getElementById('declarationsTbody'),
+  searchInput: document.getElementById('searchInput'),
+  filterStatut: document.getElementById('filterStatut'),
+  filterCategorie: document.getElementById('filterCategorie'),
+  filterDeclarant: document.getElementById('filterDeclarant'),
+  statTotal: document.getElementById('statTotal'),
+  statPerdu: document.getElementById('statPerdu'),
+  statRetrouve: document.getElementById('statRetrouve'),
+  statRestitue: document.getElementById('statRestitue'),
+  addModal: document.getElementById('addModal'),
+  detailModal: document.getElementById('detailModal'),
+  addForm: document.getElementById('addForm'),
+  detailForm: document.getElementById('detailForm'),
+  addAnonymous: document.getElementById('addAnonymous'),
+  addAnonNameWrap: document.getElementById('addAnonNameWrap'),
+  addAnonName: document.getElementById('addAnonName'),
+  commentsList: document.getElementById('commentsList'),
+  iaSuggestion: document.getElementById('iaSuggestion')
+};
+
+function seedDemoDataIfNeeded() {
+}
+
+function loadData() {
+  objets = Array.isArray(INITIAL_OBJETS) ? JSON.parse(JSON.stringify(INITIAL_OBJETS)) : [];
+  signalements = Array.isArray(INITIAL_SIGNALEMENTS) ? JSON.parse(JSON.stringify(INITIAL_SIGNALEMENTS)) : [];
+}
+
+function saveObjets() {
+}
+
+function saveSignalements() {
+}
+
+function submitServerAction(action, payload) {
+  const form = document.createElement('form');
+  form.method = 'post';
+  form.action = 'lostfound_admin.php';
+
+  const addField = (name, value) => {
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = name;
+    input.value = value == null ? '' : String(value);
+    form.appendChild(input);
+  };
+
+  addField('action', action);
+  Object.keys(payload || {}).forEach((key) => addField(key, payload[key]));
+  document.body.appendChild(form);
+  form.submit();
+}
+
+function nextId(items) {
+  return items.length ? Math.max(...items.map(i => i.id)) + 1 : 1;
+}
+
+function formatDate(dateStr) {
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr || '-';
+  return d.toLocaleDateString('fr-FR');
+}
+
+function formatDateTime(dateStr) {
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr || '-';
+  return d.toLocaleString('fr-FR');
+}
+
+function hasLengthBetween(value, min, max) {
+  const len = (value || '').trim().length;
+  return len >= min && len <= max;
+}
+
+function isValidDateYmd(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value || '')) return false;
+  const parts = String(value).split('-').map(Number);
+  if (parts.length !== 3) return false;
+  const year = parts[0];
+  const month = parts[1];
+  const day = parts[2];
+  const d = new Date(year, month - 1, day);
+  return d.getFullYear() === year && d.getMonth() === month - 1 && d.getDate() === day;
+}
+
+function isDateNotInFuture(value) {
+  if (!isValidDateYmd(value)) return false;
+  const todayYmd = currentDateYmd();
+  return value <= todayYmd;
+}
+
+function currentDateYmd() {
+  const today = new Date();
+  const y = String(today.getFullYear());
+  const m = String(today.getMonth() + 1).padStart(2, '0');
+  const d = String(today.getDate()).padStart(2, '0');
+  return y + '-' + m + '-' + d;
+}
+
+function isValidOptionalUrl(url) {
+  if (!url) return true;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch (_) {
+    return false;
+  }
+}
+
+function getImageValidationError(file) {
+  if (!file) return null;
+  const allowedTypes = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+  const maxBytes = 2 * 1024 * 1024;
+
+  if (!allowedTypes.includes(file.type)) {
+    return 'Format image invalide. Utilisez JPG, PNG, WEBP ou GIF.';
+  }
+
+  if (file.size > maxBytes) {
+    return 'Image trop lourde (max 2 Mo).';
+  }
+
+  return null;
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('Lecture image impossible.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function getDeclarantLabel(o) {
+  if (o.passager_id) return passagersMap[o.passager_id] || ('Passager #' + o.passager_id);
+  return 'Anonyme - ' + (o.anonyme_nom || 'Externe');
+}
+
+function getDeclarantType(o) {
+  return o.passager_id ? 'inscrit' : 'anonyme';
+}
+
+function getTrajetLabel(id) {
+  return 'Trajet #' + id + (trajetMap[id] ? ' · ' + trajetMap[id] : '');
+}
+
+function statutBadge(statut) {
+  if (statut === 'perdu') return '<span class="badge b-perdu">Perdu</span>';
+  if (statut === 'retrouve') return '<span class="badge b-retrouve">Retrouve</span>';
+  return '<span class="badge b-restitue">Restitue</span>';
+}
+
+function categorieLabel(cat) {
+  const labels = {
+    electronique: 'Electronique',
+    vetement: 'Vetement',
+    document: 'Document',
+    bagage: 'Bagage',
+    autre: 'Autre'
+  };
+  return labels[cat] || cat;
+}
+
+function excerpt(text, max = 68) {
+  if (!text) return '';
+  return text.length > max ? text.slice(0, max - 1) + '…' : text;
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text == null ? '' : String(text);
+  return div.innerHTML;
+}
+
+function getFilteredObjets() {
+  const q = (els.searchInput.value || '').trim().toLowerCase();
+  const statut = els.filterStatut.value;
+  const categorie = els.filterCategorie.value;
+  const declarant = els.filterDeclarant.value;
+
+  return objets.filter(o => {
+    const statusOk = statut === 'tous' || o.statut === statut;
+    const catOk = categorie === 'toutes' || o.categorie === categorie;
+    const decOk = declarant === 'tous' || getDeclarantType(o) === declarant;
+    const haystack = (o.description + ' ' + getDeclarantLabel(o)).toLowerCase();
+    const searchOk = !q || haystack.includes(q);
+    return statusOk && catOk && decOk && searchOk;
+  });
+}
+
+function renderStats() {
+  els.statTotal.textContent = objets.length;
+  els.statPerdu.textContent = objets.filter(o => o.statut === 'perdu').length;
+  els.statRetrouve.textContent = objets.filter(o => o.statut === 'retrouve').length;
+  els.statRestitue.textContent = objets.filter(o => o.statut === 'restitue').length;
+}
+
+function renderTable() {
+  const rows = getFilteredObjets().sort((a, b) => b.id - a.id);
+  if (!rows.length) {
+    els.tbody.innerHTML = '<tr><td colspan="7"><div class="empty"><i class="fas fa-inbox"></i>Aucune declaration ne correspond aux filtres.</div></td></tr>';
+    return;
+  }
+
+  els.tbody.innerHTML = rows.map(o => {
+    return '<tr>' +
+      '<td><code>#' + o.id + '</code></td>' +
+      '<td>' + escapeHtml(getDeclarantLabel(o)) + '</td>' +
+      '<td>' + escapeHtml(getTrajetLabel(o.trajet_id)) + '</td>' +
+      '<td><span class="badge b-cat">' + escapeHtml(categorieLabel(o.categorie)) + '</span></td>' +
+      '<td>' + escapeHtml(excerpt(o.description)) + '</td>' +
+      '<td>' + statutBadge(o.statut) + '</td>' +
+      '<td><div class="acts">' +
+      '<button class="ic ic-view" title="Details" data-action="details" data-id="' + o.id + '"><i class="fas fa-eye"></i></button>' +
+      '<button class="ic ic-del" title="Supprimer" data-action="delete" data-id="' + o.id + '"><i class="fas fa-trash"></i></button>' +
+      '</div></td>' +
+      '</tr>';
+  }).join('');
+}
+
+function renderAll() {
+  renderStats();
+  renderTable();
+}
+
+function openModal(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.add('open');
+}
+
+function closeModal(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.remove('open');
+}
+
+function clearAddForm() {
+  els.addForm.reset();
+  els.addAnonNameWrap.style.display = 'none';
+  clearAddValidation();
+}
+
+function clearAddValidation() {
+  const formError = document.getElementById('addFormError');
+  formError.textContent = '';
+  formError.classList.remove('show');
+
+  ['addCategorie','addStatut','addTrajet','addDescription','addPhoto','addDate','addAnonName'].forEach(fieldId => {
+    const input = document.getElementById(fieldId);
+    const error = document.getElementById(fieldId + 'Error');
+    if (input) input.classList.remove('input-invalid');
+    if (error) {
+      error.textContent = '';
+      error.classList.remove('show');
+    }
+  });
+}
+
+function setAddFormError(message) {
+  const formError = document.getElementById('addFormError');
+  formError.textContent = message;
+  formError.classList.add('show');
+}
+
+function setFieldError(fieldId, message) {
+  const input = document.getElementById(fieldId);
+  const error = document.getElementById(fieldId + 'Error');
+  if (input) input.classList.add('input-invalid');
+  if (error) {
+    error.textContent = message;
+    error.classList.add('show');
+  }
+}
+
+function clearFieldError(fieldId) {
+  const input = document.getElementById(fieldId);
+  const error = document.getElementById(fieldId + 'Error');
+  if (input) input.classList.remove('input-invalid');
+  if (error) {
+    error.textContent = '';
+    error.classList.remove('show');
+  }
+}
+
+function openDetails(id) {
+  const obj = objets.find(o => o.id === id);
+  if (!obj) return;
+  currentDetailId = id;
+
+  document.getElementById('detailId').value = obj.id;
+  document.getElementById('detailTrajet').value = obj.trajet_id;
+  document.getElementById('detailCategorie').value = obj.categorie;
+  document.getElementById('detailDescription').value = obj.description;
+  document.getElementById('detailStatut').value = obj.statut;
+
+  renderComments(id);
+  renderIaSuggestion(id);
+  openModal('detailModal');
+}
+
+function renderComments(objetId) {
+  const rows = signalements
+    .filter(s => s.objet_id === objetId)
+    .sort((a, b) => new Date(b.date_signalement) - new Date(a.date_signalement));
+
+  if (!rows.length) {
+    els.commentsList.innerHTML = '<div class="comment-item"><div class="comment-meta">Aucun commentaire</div><div class="comment-msg">Ajoutez un commentaire conducteur pour enrichir le suivi.</div></div>';
+    return;
+  }
+
+  els.commentsList.innerHTML = rows.map(s => {
+    return '<div class="comment-item">' +
+      '<div class="comment-meta">' + escapeHtml(formatDateTime(s.date_signalement)) + ' · Conducteur #' + escapeHtml(String(s.conducteur_id)) + '</div>' +
+      '<div class="comment-msg">' + escapeHtml(s.message) + '</div>' +
+      '</div>';
+  }).join('');
+}
+
+function extractKeywords(text) {
+  if (!text) return [];
+  const stop = new Set(['le','la','les','de','des','du','un','une','et','ou','dans','sur','avec','pour','par','au','aux','en','a','est','ce','cet','cette','se','sous']);
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length > 2 && !stop.has(w));
+}
+
+function renderIaSuggestion(objetId) {
+  const currentObj = objets.find(o => o.id === objetId);
+  if (!currentObj) {
+    els.iaSuggestion.textContent = 'Aucune suggestion disponible.';
+    return;
+  }
+
+  const comments = signalements
+    .filter(s => s.objet_id === objetId)
+    .sort((a, b) => new Date(b.date_signalement) - new Date(a.date_signalement));
+
+  if (!comments.length) {
+    els.iaSuggestion.textContent = 'Aucun commentaire pour le moment.';
+    return;
+  }
+
+  const last = comments[0];
+  const words = extractKeywords(last.message);
+
+  let best = null;
+  let score = 0;
+
+  objets.forEach(o => {
+    if (o.id === objetId) return;
+    const hay = (o.description + ' ' + o.categorie).toLowerCase();
+    let currentScore = 0;
+    words.forEach(w => {
+      if (hay.includes(w)) currentScore += 1;
+    });
+    if (currentObj.categorie === o.categorie) currentScore += 1;
+    if (currentScore > score) {
+      score = currentScore;
+      best = o;
+    }
+  });
+
+  if (!best || score < 1) {
+    els.iaSuggestion.textContent = '🔍 IA : Aucun rapprochement clair detecte pour le dernier commentaire.';
+    return;
+  }
+
+  const txt = '🔍 IA : Cet objet ressemble a la declaration #' + best.id +
+    ' (' + excerpt(best.description, 35) + ') faite par ' +
+    getDeclarantLabel(best) + ' le ' + formatDate(best.date_perte) + '.';
+  els.iaSuggestion.textContent = txt;
+}
+
+function deleteDeclaration(id) {
+  const ok = confirm('Supprimer cette declaration et tous ses commentaires associes ?');
+  if (!ok) return;
+  submitServerAction('delete_declaration', { id });
+}
+
+function bindEvents() {
+  const addDateInput = document.getElementById('addDate');
+  const addTrajetInput = document.getElementById('addTrajet');
+  addDateInput.setAttribute('max', currentDateYmd());
+  addTrajetInput.addEventListener('input', e => {
+    e.target.value = String(e.target.value || '').replace(/[^\d]/g, '');
+    clearFieldError('addTrajet');
+  });
+  document.getElementById('addCategorie').addEventListener('change', () => clearFieldError('addCategorie'));
+  document.getElementById('addStatut').addEventListener('change', () => clearFieldError('addStatut'));
+  document.getElementById('addDescription').addEventListener('input', () => clearFieldError('addDescription'));
+  document.getElementById('addPhoto').addEventListener('change', () => clearFieldError('addPhoto'));
+  document.getElementById('addDate').addEventListener('change', () => clearFieldError('addDate'));
+  document.getElementById('addAnonName').addEventListener('input', () => clearFieldError('addAnonName'));
+
+  document.getElementById('openAddModalBtn').addEventListener('click', () => openModal('addModal'));
+
+  document.querySelectorAll('[data-close]').forEach(btn => {
+    btn.addEventListener('click', () => closeModal(btn.getAttribute('data-close')));
+  });
+
+  [els.addModal, els.detailModal].forEach(overlay => {
+    overlay.addEventListener('click', e => {
+      if (e.target === overlay) overlay.classList.remove('open');
+    });
+  });
+
+  els.addAnonymous.addEventListener('change', () => {
+    const show = els.addAnonymous.checked;
+    els.addAnonNameWrap.style.display = show ? 'block' : 'none';
+    if (!show) {
+      els.addAnonName.value = '';
+      clearFieldError('addAnonName');
+    }
+  });
+
+  els.addForm.addEventListener('submit', async e => {
+    e.preventDefault();
+    clearAddValidation();
+
+    const categorie = (document.getElementById('addCategorie').value || '').trim();
+    const statut = (document.getElementById('addStatut').value || '').trim();
+    const trajetRaw = (document.getElementById('addTrajet').value || '').trim();
+    const description = (document.getElementById('addDescription').value || '').trim();
+    const photoFile = document.getElementById('addPhoto').files[0] || null;
+    const datePerte = (document.getElementById('addDate').value || '').trim();
+    const anonymous = els.addAnonymous.checked;
+    const anonName = (els.addAnonName.value || '').trim();
+
+    const allowedCategories = ['electronique', 'vetement', 'document', 'bagage', 'autre'];
+    const allowedStatus = ['perdu', 'retrouve', 'restitue'];
+    const trajetId = Number(trajetRaw);
+    const errors = {};
+
+    if (!allowedCategories.includes(categorie)) {
+      errors.addCategorie = 'Choisissez une categorie valide.';
+    }
+
+    if (!allowedStatus.includes(statut)) {
+      errors.addStatut = 'Choisissez un statut valide.';
+    }
+
+    if (!Number.isInteger(trajetId) || trajetId < 1) {
+      errors.addTrajet = 'Trajet ID invalide (entier positif attendu).';
+    }
+
+    if (!hasLengthBetween(description, 10, 1200)) {
+      errors.addDescription = 'Description invalide (entre 10 et 1200 caracteres).';
+    }
+
+    if (!isValidDateYmd(datePerte) || !isDateNotInFuture(datePerte)) {
+      errors.addDate = 'Date de perte invalide ou future.';
+    }
+
+    const imageError = getImageValidationError(photoFile);
+    if (imageError) {
+      errors.addPhoto = imageError;
+    }
+
+    if (anonymous && !hasLengthBetween(anonName, 2, 80)) {
+      errors.addAnonName = 'Nom externe requis (2 a 80 caracteres).';
+    }
+
+    const errorFields = Object.keys(errors);
+    if (errorFields.length > 0) {
+      setAddFormError('Veuillez corriger les champs en rouge.');
+      errorFields.forEach(fieldId => setFieldError(fieldId, errors[fieldId]));
+      const firstField = document.getElementById(errorFields[0]);
+      if (firstField) firstField.focus();
+      return;
+    }
+
+    let photoUrl = '';
+    if (photoFile) {
+      try {
+        photoUrl = await readFileAsDataUrl(photoFile);
+      } catch (_) {
+        setAddFormError('Impossible de lire l image selectionnee.');
+        setFieldError('addPhoto', 'Reessayez avec une autre image.');
+        return;
+      }
+    }
+
+    submitServerAction('create_declaration', {
+      titre: 'Declaration #' + Date.now(),
+      description,
+      categorie,
+      statut,
+      photo_url: photoUrl,
+      date_perte: datePerte,
+      trajet_id: trajetId,
+      passager_id: anonymous ? '' : (Math.floor(Math.random() * 5) + 1),
+      anonyme_nom: anonymous ? anonName : ''
+    });
+  });
+
+  els.tbody.addEventListener('click', e => {
+    const btn = e.target.closest('button[data-action]');
+    if (!btn) return;
+    const id = Number(btn.getAttribute('data-id'));
+    const action = btn.getAttribute('data-action');
+
+    if (action === 'details') openDetails(id);
+    if (action === 'delete') deleteDeclaration(id);
+  });
+
+  els.searchInput.addEventListener('input', renderTable);
+  els.filterStatut.addEventListener('change', renderTable);
+  els.filterCategorie.addEventListener('change', renderTable);
+  els.filterDeclarant.addEventListener('change', renderTable);
+
+  els.detailForm.addEventListener('submit', e => {
+    e.preventDefault();
+    if (currentDetailId == null) return;
+
+    submitServerAction('update_declaration', {
+      id: currentDetailId,
+      trajet_id: Number(document.getElementById('detailTrajet').value),
+      categorie: document.getElementById('detailCategorie').value,
+      description: document.getElementById('detailDescription').value.trim(),
+      statut: document.getElementById('detailStatut').value
+    });
+  });
+
+  document.getElementById('markRestitueBtn').addEventListener('click', () => {
+    if (currentDetailId == null) return;
+
+    submitServerAction('mark_restitue', { id: currentDetailId });
+  });
+
+  document.getElementById('deleteFromModalBtn').addEventListener('click', () => {
+    if (currentDetailId == null) return;
+
+    if (!confirm('Supprimer cette declaration et tous ses commentaires associes ?')) {
+      return;
+    }
+
+    deleteDeclaration(currentDetailId);
+  });
+
+  document.getElementById('addCommentBtn').addEventListener('click', () => {
+    if (currentDetailId == null) return;
+
+    const conducteurId = Number(document.getElementById('commentConducteurId').value);
+    const message = (document.getElementById('commentMessage').value || '').trim();
+    if (!conducteurId || !message) {
+      alert('Renseignez conducteur_id et message.');
+      return;
+    }
+
+    submitServerAction('add_comment', {
+      declaration_id: currentDetailId,
+      conducteur_id: conducteurId,
+      message
+    });
+  });
+}
+
+function init() {
+  loadData();
+  bindEvents();
+  renderAll();
+}
+
+init();
+</script>
+</body>
+</html>
