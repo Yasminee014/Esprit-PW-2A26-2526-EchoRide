@@ -1,3 +1,7 @@
+<?php
+if (session_status() === PHP_SESSION_NONE) session_start();
+// Les variables $vehicules viennent du contrôleur
+?>
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -6,361 +10,411 @@
     <title>Véhicules Disponibles | EcoRide</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        * { margin:0; padding:0; box-sizing:border-box; }
-        :root { --bleu-fonce:#1976D2; --bleu-clair:#61B3FA; --blanc:#F4F5F7; --gris:#A7A9AC; --dark-bg:#0A1628; }
-        body { font-family:'Poppins','Segoe UI',sans-serif; background:linear-gradient(135deg,var(--dark-bg) 0%,#0D1F3A 100%); color:#fff; min-height:100vh; }
-
-        .navbar { background:linear-gradient(90deg,var(--bleu-fonce),#0F3B6E); padding:1rem 2rem; display:flex; justify-content:space-between; align-items:center; box-shadow:0 4px 20px rgba(0,0,0,.3); position:sticky; top:0; z-index:100; }
-        .navbar .logo { display:flex; align-items:center; gap:10px; font-size:1.3rem; font-weight:700; color:#fff; text-decoration:none; }
-        .navbar .logo i { color:var(--bleu-clair); }
-        .navbar nav a { color:#fff !important; text-decoration:none !important; padding:.5rem 1.2rem; border-radius:25px; font-size:.88rem; font-weight:500; transition:all .3s; border:1px solid rgba(97,179,250,.35); background:rgba(255,255,255,.08); display:inline-flex; align-items:center; gap:8px; margin:0 2px; }
-        .navbar nav a:hover { background:rgba(25,118,210,.3) !important; border-color:#61B3FA !important; color:#fff !important; }
-        .navbar nav a.active { background:rgba(255,255,255,.08) !important; border-color:rgba(97,179,250,.35) !important; color:#fff !important; }
-        .navbar nav a.admin-nav { background:rgba(255,255,255,.08) !important; border-color:rgba(97,179,250,.35) !important; color:#fff !important; }
-        .navbar nav a.admin-nav:hover { background:rgba(25,118,210,.3) !important; border-color:#61B3FA !important; color:#61B3FA !important; }
-
-        .container { max-width:1200px; margin:0 auto; padding:2rem; }
-
-        .page-header { margin-bottom:2rem; }
-        .page-header h1 { font-size:1.8rem; display:flex; align-items:center; gap:10px; margin-bottom:.5rem; }
-        .page-header h1 i { color:var(--bleu-clair); }
-        .page-header p { color:var(--gris); }
-
-        .vehicules-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:1.5rem; }
-
-        .vehicule-card { background:rgba(255,255,255,.07); border-radius:20px; border:1px solid rgba(97,179,250,.2); overflow:hidden; transition:all .3s; }
-        .vehicule-card:hover { transform:translateY(-5px); border-color:var(--bleu-clair); box-shadow:0 10px 30px rgba(25,118,210,.2); }
-
-        .card-header { background:linear-gradient(135deg,rgba(25,118,210,.4),rgba(97,179,250,.1)); padding:1.2rem 1.5rem; }
-        .card-header h3 { font-size:1.1rem; display:flex; align-items:center; gap:8px; }
-        .card-header h3 i { color:var(--bleu-clair); }
-
-        /* ── Silhouette véhicule ── */
-        .car-visual {
-            width:100%; height:160px; display:flex; align-items:center; justify-content:center;
-            position:relative; overflow:hidden;
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-        .car-visual .car-bg {
-            position:absolute; inset:0;
-            background:linear-gradient(135deg,rgba(25,118,210,.15),rgba(97,179,250,.05));
-        }
-        .car-visual svg { position:relative; z-index:1; width:240px; height:120px; filter:drop-shadow(0 8px 24px rgba(0,0,0,.4)); transition:transform .3s; }
-        .vehicule-card:hover .car-visual svg { transform:scale(1.05) translateY(-4px); }
-        .car-visual .car-badge {
-            position:absolute; bottom:10px; right:14px; z-index:2;
-            background:rgba(0,0,0,.45); backdrop-filter:blur(6px);
-            border:1px solid rgba(255,255,255,.15); border-radius:20px;
-            padding:.25rem .75rem; font-size:.75rem; font-weight:600; color:#fff;
-            display:flex; align-items:center; gap:5px;
-        }
-        .color-dot { width:10px; height:10px; border-radius:50%; border:1px solid rgba(255,255,255,.3); display:inline-block; }
-        .conducteur { font-size:.82rem; color:var(--gris); margin-top:.3rem; }
 
-        .card-body { padding:1.5rem; }
-        .card-info { display:grid; grid-template-columns:1fr 1fr; gap:.8rem; margin-bottom:1.2rem; }
-        .info-item .info-label { font-size:.75rem; color:var(--gris); text-transform:uppercase; letter-spacing:.5px; display:block; }
-        .info-item .info-value { font-size:.95rem; font-weight:500; display:block; margin-top:3px; }
-        .info-item .info-value code { color:var(--bleu-clair); font-family:monospace; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0A1628;
+            color: #fff;
+            transition: background 0.3s, color 0.3s;
+        }
 
+        /* ===== MODE CLAIR ===== */
+        body.light-mode {
+            background: #f5f5f5;
+            color: #333;
+        }
+        body.light-mode .navbar {
+            background: #fff;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        body.light-mode .navbar .logo,
+        body.light-mode .navbar .dropdown-btn,
+        body.light-mode .navbar .user-info {
+            color: #1976D2;
+        }
+        body.light-mode .dropdown-content {
+            background: #fff;
+            border: 1px solid #e0e0e0;
+        }
+        body.light-mode .dropdown-content a {
+            color: #333;
+        }
+        body.light-mode .vehicule-card,
+        body.light-mode .stat-card {
+            background: #fff;
+            border-color: #e0e0e0;
+            color: #333;
+        }
+        body.light-mode .hero-section {
+            background: linear-gradient(135deg, #1565C0, #0D47A1);
+        }
+        body.light-mode .info-tag {
+            background: #f0f0f0;
+            color: #555;
+        }
+        body.light-mode .filter-group {
+            background: #fff;
+            border: 1px solid #e0e0e0;
+        }
+        body.light-mode .filter-group input,
+        body.light-mode .filter-group select {
+            color: #333;
+        }
+
+        /* ===== NAVBAR ===== */
+        .navbar {
+            background: linear-gradient(90deg, #1976D2, #0F3B6E);
+            padding: 0.8rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .nav-left { display: flex; align-items: center; gap: 2rem; }
+        .logo { display: flex; align-items: center; gap: 8px; font-size: 1.3rem; font-weight: 700; color: #fff; text-decoration: none; }
+        .logo i { color: #61B3FA; }
+        .dropdown { position: relative; display: inline-block; }
+        .dropdown-btn {
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            padding: 0.6rem 1.2rem;
+            border: 1px solid rgba(97,179,250,.4);
+            border-radius: 30px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .dropdown-btn:hover { background: rgba(255,255,255,0.2); }
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            top: 110%;
+            left: 0;
+            min-width: 220px;
+            background: linear-gradient(145deg, #0D1F3A, #122A4A);
+            border: 1px solid rgba(97,179,250,.3);
+            border-radius: 12px;
+            box-shadow: 0 8px 30px rgba(0,0,0,.4);
+            z-index: 200;
+            overflow: hidden;
+        }
+        .dropdown-content.show { display: block; animation: fadeInDown 0.25s ease; }
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .dropdown-content a {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 0.8rem 1.2rem;
+            color: #fff;
+            text-decoration: none;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+        .dropdown-content a i { width: 20px; color: #61B3FA; }
+        .dropdown-content a:hover { background: rgba(97,179,250,.15); padding-left: 1.5rem; }
+        .dropdown-content a.active { background: rgba(25,118,210,.3); border-left: 3px solid #61B3FA; }
+        .dropdown-divider { height: 1px; background: rgba(97,179,250,.2); margin: 0.3rem 0; }
+        .nav-right { display: flex; align-items: center; gap: 1rem; }
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255,255,255,0.1);
+            padding: 0.4rem 1rem;
+            border-radius: 30px;
+            font-size: 0.85rem;
+        }
+        .theme-btn {
+            background: rgba(255,255,255,0.1);
+            border: none;
+            color: #fff;
+            padding: 0.4rem 0.8rem;
+            border-radius: 30px;
+            cursor: pointer;
+        }
+
+        .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+
+        .hero-section {
+            background: linear-gradient(135deg, #1976D2, #0F3B6E);
+            border-radius: 20px;
+            padding: 2.5rem;
+            margin-bottom: 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 2rem;
+        }
+        .hero-content h1 { font-size: 2rem; margin-bottom: 0.5rem; }
+        .hero-content h1 .highlight { color: #61B3FA; }
+        .hero-content p { color: rgba(255,255,255,0.8); margin-bottom: 1rem; }
+        .hero-stats { display: flex; gap: 2rem; margin: 1rem 0; }
+        .hero-stats .stat { text-align: center; }
+        .hero-stats .stat .number { font-size: 1.5rem; font-weight: bold; }
+        .hero-stats .stat .label { font-size: 0.7rem; opacity: 0.7; }
+        .hero-btn {
+            background: white;
+            color: #1976D2;
+            padding: 0.7rem 1.5rem;
+            border-radius: 30px;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: transform 0.3s;
+        }
+        .hero-btn:hover { transform: translateY(-2px); }
+        .hero-icon { font-size: 5rem; opacity: 0.5; animation: float 3s ease-in-out infinite; }
+        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+
+        .filters-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.8rem;
+            margin-bottom: 1.5rem;
+            background: rgba(255,255,255,0.05);
+            padding: 1rem;
+            border-radius: 16px;
+        }
+        .filter-group {
+            background: rgba(255,255,255,0.08);
+            border-radius: 30px;
+            padding: 0.5rem 1rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .filter-group i { color: #61B3FA; }
+        .filter-group input, .filter-group select {
+            background: transparent;
+            border: none;
+            color: #fff;
+            outline: none;
+            padding: 0.3rem;
+        }
+        .filter-group select option { background: #0D1F3A; }
+        .btn-reset {
+            background: rgba(231,76,60,0.2);
+            border: 1px solid rgba(231,76,60,0.4);
+            color: #e74c3c;
+            padding: 0.5rem 1rem;
+            border-radius: 30px;
+            cursor: pointer;
+        }
+
+        .section-title {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+        .count-badge {
+            background: rgba(97,179,250,0.2);
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+        }
+
+        .vehicules-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+        .vehicule-card {
+            background: rgba(255,255,255,0.07);
+            border-radius: 16px;
+            overflow: hidden;
+            transition: transform 0.3s, box-shadow 0.3s;
+            border: 1px solid rgba(97,179,250,0.15);
+            animation: fadeInUp 0.5s ease forwards;
+            opacity: 0;
+        }
+        .vehicule-card:nth-child(1) { animation-delay: 0.1s; }
+        .vehicule-card:nth-child(2) { animation-delay: 0.2s; }
+        .vehicule-card:nth-child(3) { animation-delay: 0.3s; }
+        .vehicule-card:nth-child(4) { animation-delay: 0.4s; }
+        .vehicule-card:nth-child(5) { animation-delay: 0.5s; }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .vehicule-card:hover { transform: translateY(-5px); box-shadow: 0 10px 30px rgba(0,0,0,0.3); border-color: #61B3FA; }
+
+        .card-image {
+            height: 160px;
+            overflow: hidden;
+            background: #1a1a2e;
+        }
+        .card-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.3s;
+        }
+        .vehicule-card:hover .card-image img { transform: scale(1.05); }
+
+        .card-content { padding: 1rem; }
+        .card-title { font-size: 1.1rem; font-weight: bold; margin-bottom: 0.3rem; }
+        .card-driver { font-size: 0.8rem; color: #A7A9AC; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 5px; }
+        .card-info { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.8rem 0; }
+        .info-tag {
+            background: rgba(255,255,255,0.1);
+            padding: 0.2rem 0.6rem;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
         .btn-reserver {
-            width:100%; background:linear-gradient(135deg,var(--bleu-fonce),var(--bleu-clair));
-            color:#fff; border:none; padding:.9rem; border-radius:12px;
-            font-size:.95rem; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px;
-            transition:all .3s; margin-top:1rem;
+            width: 100%;
+            background: linear-gradient(135deg, #1976D2, #61B3FA);
+            border: none;
+            color: white;
+            padding: 0.7rem;
+            border-radius: 30px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+            transition: opacity 0.3s;
         }
-        .btn-reserver:hover { transform:translateY(-2px); box-shadow:0 8px 20px rgba(25,118,210,.4); }
+        .btn-reserver:hover { opacity: 0.9; }
 
-        .empty-state { text-align:center; padding:4rem 2rem; background:rgba(255,255,255,.05); border-radius:20px; border:1px dashed rgba(97,179,250,.3); }
-        .empty-state i { font-size:4rem; color:rgba(97,179,250,.3); margin-bottom:1rem; display:block; }
-        .empty-state p { color:var(--gris); }
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            background: rgba(255,255,255,0.05);
+            border-radius: 20px;
+        }
+        .empty-state i { font-size: 3rem; opacity: 0.3; margin-bottom: 1rem; }
 
-        .alert { padding:1rem 1.5rem; border-radius:14px; margin-bottom:1.5rem; display:flex; align-items:center; gap:10px; }
-        .alert-success { background:rgba(39,174,96,.15); border:1px solid rgba(39,174,96,.4); color:#27ae60; }
-        .alert-error   { background:rgba(231,76,60,.15);  border:1px solid rgba(231,76,60,.4);  color:#e74c3c; }
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 0.8rem 1.5rem;
+            border-radius: 10px;
+            z-index: 1000;
+            animation: slideIn 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85rem;
+        }
+        .toast.success { background: #27ae60; color: white; }
+        .toast.error { background: #e74c3c; color: white; }
+        .toast.info { background: #1976D2; color: white; }
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
 
-        /* Modal réservation */
-        .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.7); z-index:1000; align-items:center; justify-content:center; }
-        .modal-overlay.open { display:flex; }
-        .modal { background:linear-gradient(135deg,#0D1F3A,#1a2f50); border:1px solid rgba(97,179,250,.3); border-radius:24px; padding:2rem; width:480px; max-width:95vw; }
-        .modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem; padding-bottom:1rem; border-bottom:2px solid rgba(97,179,250,.3); }
-        .modal-header h3 { font-size:1.2rem; color:var(--bleu-clair); display:flex; align-items:center; gap:8px; }
-        .modal-close { background:none; border:none; color:var(--gris); font-size:1.4rem; cursor:pointer; }
-        .modal-close:hover { color:#e74c3c; }
-
-        .modal-info { background:rgba(255,255,255,.06); border-radius:12px; padding:1rem; margin-bottom:1.2rem; }
-        .modal-info p { font-size:.9rem; color:var(--gris); display:flex; align-items:center; gap:8px; margin-bottom:.5rem; }
-        .modal-info p:last-child { margin-bottom:0; }
-        .modal-info i { color:var(--bleu-clair); width:16px; }
-        .modal-info strong { color:#fff; }
-
-        .form-group { display:flex; flex-direction:column; gap:.5rem; margin-bottom:1rem; }
-        .form-group label { font-size:.85rem; color:var(--bleu-clair); display:flex; align-items:center; gap:6px; }
-        .form-group input { background:rgba(255,255,255,.08); border:1px solid rgba(97,179,250,.3); color:#fff; padding:.7rem 1rem; border-radius:12px; font-size:.9rem; outline:none; transition:all .3s; }
-        .form-group input:focus { border-color:var(--bleu-clair); }
-        .field-error { color:#e74c3c; font-size:.78rem; }
-
-        .modal-buttons { display:flex; gap:1rem; margin-top:1.5rem; justify-content:flex-end; }
-        .btn-save { background:linear-gradient(135deg,var(--bleu-fonce),var(--bleu-clair)); color:#fff; border:none; padding:.8rem 2rem; border-radius:12px; font-size:.95rem; cursor:pointer; display:flex; align-items:center; gap:8px; transition:all .3s; }
-        .btn-save:hover { transform:translateY(-2px); }
-        .btn-cancel { background:rgba(255,255,255,.1); color:var(--gris); border:1px solid rgba(255,255,255,.2); padding:.8rem 1.5rem; border-radius:12px; font-size:.95rem; cursor:pointer; display:flex; align-items:center; gap:8px; transition:all .3s; }
-        .btn-cancel:hover { background:rgba(231,76,60,.2); color:#e74c3c; }
+        @media (max-width: 768px) {
+            .navbar { flex-direction: column; gap: 1rem; }
+            .hero-section { flex-direction: column; text-align: center; }
+            .hero-stats { justify-content: center; }
+            .filters-bar { flex-direction: column; align-items: stretch; }
+            .vehicules-grid { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
 
 <nav class="navbar">
-    <a href="../index.php" class="logo"><i class="fas fa-leaf"></i> EcoRide</a>
-    <nav>
-        <a href="vehicules_disponibles.php" class="active"><i class="fas fa-car"></i> Covoiturages</a>
-        <a href="mes_reservations.php"><i class="fas fa-calendar-check"></i> Réservations</a>
-        <a href="mes_vehicules.php"><i class="fas fa-key"></i> Mes véhicules</a>
-        <a href="mon_historique.php"><i class="fas fa-history"></i> Mon historique</a>
-        
-        <a href="../backoffice/admin.php" class="admin-nav"><i class="fas fa-shield-alt"></i> Admin</a>
-
-        <a href="logout.php"><i class="fas fa-sign-out-alt"></i></a>
-    </nav>
+    <div class="nav-left">
+        <a href="../index.php" class="logo"><i class="fas fa-leaf"></i><span>EcoRide</span></a>
+        <div class="dropdown">
+            <button class="dropdown-btn" onclick="toggleDropdown()"><i class="fas fa-bars"></i><span>Menu</span></button>
+            <div class="dropdown-content" id="dropdownMenu">
+                <a href="vehicules_disponibles.php" class="active"><i class="fas fa-car"></i> Covoiturages</a>
+                <a href="mes_reservations.php"><i class="fas fa-calendar-check"></i> Mes réservations</a>
+                <a href="mes_vehicules.php"><i class="fas fa-key"></i> Mes véhicules</a>
+                <a href="mon_historique.php"><i class="fas fa-history"></i> Mon historique</a>
+                <div class="dropdown-divider"></div>
+                <a href="../backoffice/admin.php" class="admin-link"><i class="fas fa-shield-alt"></i> Administration</a>
+                <a href="logout.php" class="logout-link"><i class="fas fa-sign-out-alt"></i> Déconnexion</a>
+            </div>
+        </div>
+    </div>
+    <div class="nav-right">
+        <button id="themeToggle" class="theme-btn"><i class="fas fa-moon"></i></button>
+        <div class="user-info"><i class="fas fa-user-circle"></i><span><?= $_SESSION['user_name'] ?? 'Utilisateur' ?></span></div>
+    </div>
 </nav>
 
 <div class="container">
 
-    <?php if (!empty($_SESSION['success'])): ?>
-        <div class="alert alert-success"><i class="fas fa-check-circle"></i> <?= htmlspecialchars($_SESSION['success']) ?></div>
-        <?php unset($_SESSION['success']); ?>
-    <?php endif; ?>
-    <?php if (!empty($_SESSION['errors'])): ?>
-        <div class="alert alert-error">
-            <i class="fas fa-exclamation-circle"></i>
-            <?php foreach ($_SESSION['errors'] as $e): ?><?= htmlspecialchars($e) ?><?php endforeach; ?>
+    <div class="hero-section">
+        <div class="hero-content">
+            <h1>Trouvez votre <span class="highlight">véhicule idéal</span></h1>
+            <p>Réservez facilement un véhicule pour vos déplacements en toute confiance</p>
+            <div class="hero-stats">
+                <div class="stat"><div class="number"><?= count($vehicules) ?>+</div><div class="label">Véhicules</div></div>
+                <div class="stat"><div class="number">24/7</div><div class="label">Service client</div></div>
+                <div class="stat"><div class="number">100%</div><div class="label">Sécurisé</div></div>
+            </div>
+            <a href="#vehicules" class="hero-btn">Explorer les véhicules <i class="fas fa-arrow-down"></i></a>
         </div>
-        <?php unset($_SESSION['errors']); ?>
-    <?php endif; ?>
+        <div class="hero-icon"><i class="fas fa-car-side"></i></div>
+    </div>
 
-    <div class="page-header">
-        <h1><i class="fas fa-car"></i> Véhicules Disponibles</h1>
-        <p><?= count($vehicules) ?> véhicule<?= count($vehicules) > 1 ? 's' : '' ?> disponible<?= count($vehicules) > 1 ? 's' : '' ?></p>
+    <div class="filters-bar">
+        <div class="filter-group"><i class="fas fa-search"></i><input type="text" id="searchInput" placeholder="Rechercher..."></div>
+        <div class="filter-group"><i class="fas fa-users"></i><select id="filterPlaces"><option value="">Tous les véhicules</option><option value="4">4 places</option><option value="5">5 places</option><option value="7">7 places</option></select></div>
+        <div class="filter-group"><i class="fas fa-snowflake"></i><select id="filterClim"><option value="">Climatisation</option><option value="1">Avec clim</option><option value="0">Sans clim</option></select></div>
+        <button id="resetFilters" class="btn-reset"><i class="fas fa-times"></i> Réinitialiser</button>
+    </div>
+
+    <div class="section-title" id="vehicules">
+        <h2><i class="fas fa-car"></i> Véhicules Disponibles</h2>
+        <span class="count-badge"><?= count($vehicules) ?> véhicules</span>
     </div>
 
     <?php if (empty($vehicules)): ?>
-        <div class="empty-state">
-            <i class="fas fa-car-side"></i>
-            <p>Aucun véhicule disponible pour le moment.</p>
-        </div>
+        <div class="empty-state"><i class="fas fa-car-side"></i><p>Aucun véhicule disponible pour le moment.</p></div>
     <?php else: ?>
-        <div class="vehicules-grid">
-            <?php foreach ($vehicules as $v): ?>
-            <div class="vehicule-card">
-                <?php
-                    // Couleur CSS selon la couleur en base
-                    $couleurNom = strtolower(trim($v['couleur'] ?? ''));
-                    $couleurMap = [
-                        'rouge'      => '#e74c3c', 'red'        => '#e74c3c',
-                        'bleu'       => '#2980b9', 'blue'       => '#2980b9',
-                        'vert'       => '#27ae60', 'green'      => '#27ae60',
-                        'noir'       => '#2c3e50', 'black'      => '#2c3e50',
-                        'blanc'      => '#ecf0f1', 'white'      => '#ecf0f1',
-                        'gris'       => '#7f8c8d', 'grey'       => '#7f8c8d', 'gray' => '#7f8c8d',
-                        'jaune'      => '#f1c40f', 'yellow'     => '#f1c40f',
-                        'orange'     => '#e67e22',
-                        'violet'     => '#8e44ad', 'purple'     => '#8e44ad',
-                        'marron'     => '#795548', 'brown'      => '#795548',
-                        'beige'      => '#d4a96a',
-                        'argent'     => '#bdc3c7', 'silver'     => '#bdc3c7',
-                    ];
-                    $carColor  = $couleurMap[$couleurNom] ?? '#61B3FA';
-                    $carColorDark = $carColor . 'bb';
-
-                    // Forme SVG selon le modèle/marque (berline, SUV, citadine, etc.)
-                    $modele = strtolower($v['modele'] ?? '');
-                    $marque = strtolower($v['marque'] ?? '');
-
-                    // Détection type véhicule
-                    $suv     = preg_match('/suv|4x4|duster|captur|kadjar|tucson|qashqai|kuga|tiguan|rav4|cx5|sportage|kona|2008|3008|5008|yaris cross|t-roc|t roc|scenic/', $modele . ' ' . $marque);
-                    $berline = preg_match('/508|607|407|laguna|talisman|passat|accord|camry|model s|c class|e class|a4|a6/', $modele . ' ' . $marque);
-                    $break   = preg_match('/break|touring|combi|estate|sw/', $modele);
-
-                    // SVG citadine (défaut)
-                    $svgCitadine = <<<SVG
-                    <svg viewBox="0 0 240 100" xmlns="http://www.w3.org/2000/svg">
-                      <defs>
-                        <linearGradient id="bodyGrad{$v['id']}" x1="0%" y1="0%" x2="0%" y2="100%">
-                          <stop offset="0%" style="stop-color:{$carColor};stop-opacity:1"/>
-                          <stop offset="100%" style="stop-color:{$carColorDark};stop-opacity:1"/>
-                        </linearGradient>
-                        <linearGradient id="glassGrad{$v['id']}" x1="0%" y1="0%" x2="0%" y2="100%">
-                          <stop offset="0%" style="stop-color:#a8d8f0;stop-opacity:.9"/>
-                          <stop offset="100%" style="stop-color:#5bb3d0;stop-opacity:.6"/>
-                        </linearGradient>
-                      </defs>
-                      <!-- Ombre -->
-                      <ellipse cx="120" cy="95" rx="95" ry="6" fill="rgba(0,0,0,.3)"/>
-                      <!-- Carrosserie basse -->
-                      <rect x="15" y="62" width="210" height="22" rx="8" fill="url(#bodyGrad{$v['id']})"/>
-                      <!-- Carrosserie haute (toit citadine arrondi) -->
-                      <path d="M55 62 Q70 32 100 28 L145 28 Q175 32 188 62 Z" fill="url(#bodyGrad{$v['id']})"/>
-                      <!-- Vitre arrière -->
-                      <path d="M62 60 Q72 36 98 32 L105 32 L100 60 Z" fill="url(#glassGrad{$v['id']})" opacity=".85"/>
-                      <!-- Vitre avant -->
-                      <path d="M182 60 Q172 36 148 32 L140 32 L144 60 Z" fill="url(#glassGrad{$v['id']})" opacity=".85"/>
-                      <!-- Vitre centrale -->
-                      <rect x="104" y="32" width="36" height="28" fill="url(#glassGrad{$v['id']})" opacity=".85"/>
-                      <!-- Reflet toit -->
-                      <path d="M90 34 Q115 29 145 34 Q130 30 120 30 Q105 30 90 34 Z" fill="white" opacity=".25"/>
-                      <!-- Roue arrière -->
-                      <circle cx="60" cy="84" r="16" fill="#1a1a2e" stroke="#444" stroke-width="1.5"/>
-                      <circle cx="60" cy="84" r="10" fill="#2d2d44" stroke="#555" stroke-width="1"/>
-                      <circle cx="60" cy="84" r="4"  fill="#666"/>
-                      <!-- Roue avant -->
-                      <circle cx="178" cy="84" r="16" fill="#1a1a2e" stroke="#444" stroke-width="1.5"/>
-                      <circle cx="178" cy="84" r="10" fill="#2d2d44" stroke="#555" stroke-width="1"/>
-                      <circle cx="178" cy="84" r="4"  fill="#666"/>
-                      <!-- Phare avant -->
-                      <ellipse cx="218" cy="67" rx="8" ry="5" fill="#fffbe6" opacity=".9"/>
-                      <ellipse cx="218" cy="67" rx="5" ry="3" fill="white"/>
-                      <!-- Phare arrière -->
-                      <ellipse cx="22" cy="67" rx="7" ry="4" fill="#e74c3c" opacity=".8"/>
-                      <!-- Poignée -->
-                      <rect x="108" y="68" width="18" height="3" rx="1.5" fill="rgba(255,255,255,.25)"/>
-                      <!-- Ligne carrosserie -->
-                      <path d="M20 70 L220 70" stroke="rgba(255,255,255,.15)" stroke-width="1"/>
-                    </svg>
-                    SVG;
-
-                    $svgSuv = <<<SVG
-                    <svg viewBox="0 0 240 110" xmlns="http://www.w3.org/2000/svg">
-                      <defs>
-                        <linearGradient id="bodyGrad{$v['id']}" x1="0%" y1="0%" x2="0%" y2="100%">
-                          <stop offset="0%" style="stop-color:{$carColor};stop-opacity:1"/>
-                          <stop offset="100%" style="stop-color:{$carColorDark};stop-opacity:1"/>
-                        </linearGradient>
-                        <linearGradient id="glassGrad{$v['id']}" x1="0%" y1="0%" x2="0%" y2="100%">
-                          <stop offset="0%" style="stop-color:#a8d8f0;stop-opacity:.9"/>
-                          <stop offset="100%" style="stop-color:#5bb3d0;stop-opacity:.6"/>
-                        </linearGradient>
-                      </defs>
-                      <!-- Ombre -->
-                      <ellipse cx="120" cy="105" rx="100" ry="6" fill="rgba(0,0,0,.3)"/>
-                      <!-- Carrosserie basse (SUV plus haute) -->
-                      <rect x="12" y="60" width="216" height="32" rx="6" fill="url(#bodyGrad{$v['id']})"/>
-                      <!-- Toit SUV carré/haut -->
-                      <path d="M45 60 L50 25 L192 25 L196 60 Z" fill="url(#bodyGrad{$v['id']})"/>
-                      <!-- Vitre arrière -->
-                      <path d="M52 58 L56 28 L80 28 L76 58 Z" fill="url(#glassGrad{$v['id']})" opacity=".85"/>
-                      <!-- Vitre avant -->
-                      <path d="M190 58 L186 28 L162 28 L166 58 Z" fill="url(#glassGrad{$v['id']})" opacity=".85"/>
-                      <!-- Vitre centrale -->
-                      <rect x="80" y="28" width="82" height="30" fill="url(#glassGrad{$v['id']})" opacity=".85"/>
-                      <!-- Reflet toit -->
-                      <rect x="80" y="26" width="82" height="6" rx="2" fill="white" opacity=".2"/>
-                      <!-- Barre de toit -->
-                      <rect x="55" y="23" width="132" height="4" rx="2" fill="rgba(0,0,0,.3)"/>
-                      <!-- Roue arrière -->
-                      <circle cx="58" cy="92" r="18" fill="#1a1a2e" stroke="#444" stroke-width="1.5"/>
-                      <circle cx="58" cy="92" r="11" fill="#2d2d44" stroke="#555" stroke-width="1"/>
-                      <circle cx="58" cy="92" r="4"  fill="#666"/>
-                      <!-- Roue avant -->
-                      <circle cx="180" cy="92" r="18" fill="#1a1a2e" stroke="#444" stroke-width="1.5"/>
-                      <circle cx="180" cy="92" r="11" fill="#2d2d44" stroke="#555" stroke-width="1"/>
-                      <circle cx="180" cy="92" r="4"  fill="#666"/>
-                      <!-- Phare avant LED -->
-                      <rect x="208" y="68" width="14" height="6" rx="3" fill="#fffbe6" opacity=".9"/>
-                      <rect x="210" y="70" width="10" height="3" rx="1.5" fill="white"/>
-                      <!-- Phare arrière -->
-                      <rect x="16" y="68" width="12" height="6" rx="3" fill="#e74c3c" opacity=".8"/>
-                      <!-- Marche-pied -->
-                      <rect x="40" y="90" width="162" height="5" rx="2" fill="rgba(0,0,0,.35)"/>
-                      <!-- Ligne carrosserie -->
-                      <path d="M18 75 L222 75" stroke="rgba(255,255,255,.15)" stroke-width="1"/>
-                    </svg>
-                    SVG;
-
-                    $svgBerline = <<<SVG
-                    <svg viewBox="0 0 240 100" xmlns="http://www.w3.org/2000/svg">
-                      <defs>
-                        <linearGradient id="bodyGrad{$v['id']}" x1="0%" y1="0%" x2="0%" y2="100%">
-                          <stop offset="0%" style="stop-color:{$carColor};stop-opacity:1"/>
-                          <stop offset="100%" style="stop-color:{$carColorDark};stop-opacity:1"/>
-                        </linearGradient>
-                        <linearGradient id="glassGrad{$v['id']}" x1="0%" y1="0%" x2="0%" y2="100%">
-                          <stop offset="0%" style="stop-color:#a8d8f0;stop-opacity:.9"/>
-                          <stop offset="100%" style="stop-color:#5bb3d0;stop-opacity:.6"/>
-                        </linearGradient>
-                      </defs>
-                      <!-- Ombre -->
-                      <ellipse cx="120" cy="95" rx="100" ry="6" fill="rgba(0,0,0,.3)"/>
-                      <!-- Carrosserie basse (berline longue) -->
-                      <rect x="10" y="62" width="220" height="22" rx="6" fill="url(#bodyGrad{$v['id']})"/>
-                      <!-- Toit berline profil bas -->
-                      <path d="M48 62 Q58 30 90 26 L155 26 Q185 30 196 62 Z" fill="url(#bodyGrad{$v['id']})"/>
-                      <!-- Vitre arrière inclinée -->
-                      <path d="M55 60 Q62 34 88 30 L96 30 L90 60 Z" fill="url(#glassGrad{$v['id']})" opacity=".85"/>
-                      <!-- Vitre avant inclinée -->
-                      <path d="M187 60 Q182 34 158 30 L150 30 L154 60 Z" fill="url(#glassGrad{$v['id']})" opacity=".85"/>
-                      <!-- Vitre centrale -->
-                      <rect x="94" y="30" width="56" height="30" fill="url(#glassGrad{$v['id']})" opacity=".85"/>
-                      <!-- Reflet toit -->
-                      <path d="M95 28 Q122 23 152 28 Q132 25 120 25 Q108 25 95 28 Z" fill="white" opacity=".3"/>
-                      <!-- Roue arrière -->
-                      <circle cx="58" cy="84" r="16" fill="#1a1a2e" stroke="#444" stroke-width="1.5"/>
-                      <circle cx="58" cy="84" r="10" fill="#2d2d44" stroke="#555" stroke-width="1"/>
-                      <circle cx="58" cy="84" r="4"  fill="#666"/>
-                      <!-- Roue avant -->
-                      <circle cx="182" cy="84" r="16" fill="#1a1a2e" stroke="#444" stroke-width="1.5"/>
-                      <circle cx="182" cy="84" r="10" fill="#2d2d44" stroke="#555" stroke-width="1"/>
-                      <circle cx="182" cy="84" r="4"  fill="#666"/>
-                      <!-- Phare avant -->
-                      <ellipse cx="222" cy="68" rx="8" ry="4" fill="#fffbe6" opacity=".9"/>
-                      <!-- Phare arrière -->
-                      <ellipse cx="18" cy="68" rx="7" ry="4" fill="#e74c3c" opacity=".8"/>
-                      <!-- Ligne de style -->
-                      <path d="M15 70 Q120 65 225 70" stroke="rgba(255,255,255,.2)" stroke-width="1" fill="none"/>
-                    </svg>
-                    SVG;
-
-                    $svgFinal = $suv ? $svgSuv : ($berline ? $svgBerline : $svgCitadine);
-                ?>
-                <!-- Silhouette voiture -->
-                <div class="car-visual">
-                    <div class="car-bg"></div>
-                    <?= $svgFinal ?>
-                    <div class="car-badge">
-                        <span class="color-dot" style="background:<?= $carColor ?>"></span>
-                        <?= htmlspecialchars(ucfirst($v['couleur'] ?? '—')) ?>
-                        &nbsp;·&nbsp;
-                        <?= $suv ? 'SUV' : ($berline ? 'Berline' : 'Citadine') ?>
-                    </div>
+        <div class="vehicules-grid" id="vehiculesGrid">
+            <?php foreach ($vehicules as $v): 
+                $photoPath = '/ecoride/assets/uploads/vehicules/' . ($v['photo'] ?? '');
+                $fullServerPath = $_SERVER['DOCUMENT_ROOT'] . $photoPath;
+            ?>
+            <div class="vehicule-card" data-marque="<?= strtolower($v['marque']) ?>" data-places="<?= $v['capacite'] ?>" data-clim="<?= $v['climatisation'] ?>">
+                <div class="card-image">
+                    <?php if (!empty($v['photo']) && file_exists($fullServerPath)): ?>
+                        <img src="<?= $photoPath ?>" alt="<?= htmlspecialchars($v['marque'] . ' ' . $v['modele']) ?>">
+                    <?php else: ?>
+                        <div style="background: linear-gradient(135deg, #1976D2, #0F3B6E); height: 100%; display: flex; align-items: center; justify-content: center; flex-direction: column;">
+                            <i class="fas fa-car" style="font-size: 60px; color: rgba(255,255,255,0.3); margin-bottom: 10px;"></i>
+                            <div style="background: rgba(0,0,0,0.4); padding: 6px 20px; border-radius: 30px;">
+                                <span style="color: white; font-size: 16px; font-weight: bold;"><?= htmlspecialchars($v['marque']) ?></span>
+                                <span style="color: #61B3FA; font-size: 14px;"> <?= htmlspecialchars($v['modele']) ?></span>
+                            </div>
+                        </div>
+                    <?php endif; ?>
                 </div>
-
-                <div class="card-header">
-                    <h3><i class="fas fa-car"></i> <?= htmlspecialchars($v['marque'] . ' ' . $v['modele']) ?></h3>
-                    <p class="conducteur"><i class="fas fa-user"></i> <?= htmlspecialchars($v['prenom'] . ' ' . $v['nom']) ?></p>
-                </div>
-                <div class="card-body">
+                <div class="card-content">
+                    <div class="card-title"><?= htmlspecialchars($v['marque'] . ' ' . $v['modele']) ?></div>
+                    <div class="card-driver"><i class="fas fa-user"></i> <?= htmlspecialchars($v['prenom'] . ' ' . $v['nom']) ?></div>
                     <div class="card-info">
-                        <div class="info-item">
-                            <span class="info-label">Immatriculation</span>
-                            <span class="info-value"><code><?= htmlspecialchars($v['immatriculation']) ?></code></span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">Couleur</span>
-                            <span class="info-value"><?= htmlspecialchars($v['couleur'] ?? '—') ?></span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">Places</span>
-                            <span class="info-value"><i class="fas fa-users" style="color:var(--bleu-clair)"></i> <?= $v['capacite'] ?></span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">Climatisation</span>
-                            <span class="info-value">
-                                <?= $v['climatisation']
-                                    ? '<i class="fas fa-snowflake" style="color:var(--bleu-clair)"></i> Oui'
-                                    : '<i class="fas fa-sun" style="color:#f1c40f"></i> Non' ?>
-                            </span>
-                        </div>
+                        <span class="info-tag"><i class="fas fa-id-card"></i> <?= htmlspecialchars($v['immatriculation']) ?></span>
+                        <span class="info-tag"><i class="fas fa-users"></i> <?= $v['capacite'] ?> places</span>
+                        <span class="info-tag"><?= $v['climatisation'] ? '<i class="fas fa-snowflake" style="color:#61B3FA;"></i> Clim' : '<i class="fas fa-sun" style="color:#f1c40f;"></i> Pas de clim' ?></span>
                     </div>
-                    <a href="reserver_vehicule.php?vehicule_id=<?= $v['id'] ?>" class="btn-reserver">
-                        <i class="fas fa-calendar-plus"></i> Réserver ce véhicule
-                    </a>
+                    <a href="reserver_vehicule.php?vehicule_id=<?= $v['id'] ?>" class="btn-reserver"><i class="fas fa-calendar-plus"></i> Réserver</a>
                 </div>
             </div>
             <?php endforeach; ?>
@@ -368,107 +422,67 @@
     <?php endif; ?>
 </div>
 
-<!-- MODAL RÉSERVATION -->
-<div class="modal-overlay" id="reservationModal">
-    <div class="modal">
-        <div class="modal-header">
-            <h3><i class="fas fa-calendar-plus"></i> Réserver un véhicule</h3>
-            <button class="modal-close" onclick="closeModal()"><i class="fas fa-times"></i></button>
-        </div>
-
-        <!-- Infos véhicule -->
-        <div class="modal-info" id="vehiculeInfo"></div>
-
-        <form method="POST" id="reservationForm" novalidate>
-            <input type="hidden" name="action" value="reserver">
-            <input type="hidden" name="vehicule_id" id="vehiculeIdInput">
-
-            <div class="form-group">
-                <label><i class="fas fa-calendar-alt"></i> Date de réservation</label>
-                <input type="date" name="date_reservation" id="fieldDate" min="<?= date('Y-m-d') ?>">
-                <span class="field-error" id="errDate"></span>
-            </div>
-
-            <div class="form-group">
-                <label><i class="fas fa-sticky-note"></i> Note (optionnel)</label>
-                <input type="text" name="note" id="fieldNote" placeholder="Ex: Je prendrai à 8h devant la gare">
-            </div>
-
-            <div class="modal-buttons">
-                <button type="button" class="btn-cancel" onclick="closeModal()">
-                    <i class="fas fa-times"></i> Annuler
-                </button>
-                <button type="submit" class="btn-save">
-                    <i class="fas fa-check"></i> Confirmer la réservation
-                </button>
-            </div>
-        </form>
-    </div>
-</div>
-
 <script>
-    const modal = document.getElementById('reservationModal');
-
-    function openReservation(id, nom, conducteur, capacite, clim) {
-        document.getElementById('vehiculeIdInput').value = id;
-        document.getElementById('vehiculeInfo').innerHTML = `
-            <p><i class="fas fa-car"></i> Véhicule : <strong>${nom}</strong></p>
-            <p><i class="fas fa-user"></i> Conducteur : <strong>${conducteur}</strong></p>
-            <p><i class="fas fa-users"></i> Places : <strong>${capacite}</strong></p>
-            <p><i class="fas fa-snowflake"></i> Climatisation : <strong>${clim ? 'Oui' : 'Non'}</strong></p>
-        `;
-        document.getElementById('reservationForm').reset();
-        document.getElementById('vehiculeIdInput').value = id;
-        // Date minimum = aujourd'hui
-        document.getElementById('fieldDate').min = new Date().toISOString().split('T')[0];
-        modal.classList.add('open');
+function toggleDropdown() { document.getElementById("dropdownMenu").classList.toggle("show"); }
+window.onclick = function(event) {
+    if (!event.target.matches('.dropdown-btn')) {
+        var dropdowns = document.getElementsByClassName("dropdown-content");
+        for (var i = 0; i < dropdowns.length; i++) {
+            if (dropdowns[i].classList.contains('show')) dropdowns[i].classList.remove('show');
+        }
     }
+}
 
-    function closeModal() { modal.classList.remove('open'); }
-    window.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+const searchInput = document.getElementById('searchInput');
+const filterPlaces = document.getElementById('filterPlaces');
+const filterClim = document.getElementById('filterClim');
+const resetBtn = document.getElementById('resetFilters');
+const cards = document.querySelectorAll('.vehicule-card');
+const countBadge = document.querySelector('.count-badge');
 
-    document.getElementById('reservationForm').addEventListener('submit', function(e) {
-        const dateInput = document.getElementById('fieldDate');
-        const noteInput = document.getElementById('fieldNote');
-        const errDate   = document.getElementById('errDate');
-        const date      = dateInput ? dateInput.value : '';
-        const note      = noteInput ? noteInput.value : '';
-
-        let hasError = false;
-
-        // Vérification : date obligatoire
-        if (!date) {
-            errDate.textContent = 'Veuillez choisir une date.';
-            dateInput.style.borderColor = '#e74c3c';
-            hasError = true;
-        } else {
-            // Vérification : date pas dans le passé
-            const selected = new Date(date);
-            const today    = new Date();
-            today.setHours(0, 0, 0, 0);
-            if (selected < today) {
-                errDate.textContent = 'La date ne peut pas être dans le passé.';
-                dateInput.style.borderColor = '#e74c3c';
-                hasError = true;
-            } else {
-                errDate.textContent = '';
-                dateInput.style.borderColor = '';
-            }
-        }
-
-        // Vérification : note max 500 caractères
-        if (note.trim().length > 500) {
-            alert('❌ La note ne doit pas dépasser 500 caractères.');
-            hasError = true;
-        }
-
-        if (hasError) e.preventDefault();
+function filterVehicules() {
+    const searchTerm = searchInput.value.toLowerCase();
+    const places = filterPlaces.value;
+    const clim = filterClim.value;
+    let visible = 0;
+    cards.forEach(card => {
+        let show = true;
+        const title = card.querySelector('.card-title').innerText.toLowerCase();
+        const driver = card.querySelector('.card-driver').innerText.toLowerCase();
+        if (searchTerm && !title.includes(searchTerm) && !driver.includes(searchTerm)) show = false;
+        if (places && card.dataset.places != places) show = false;
+        if (clim !== '' && card.dataset.clim != clim) show = false;
+        card.style.display = show ? 'block' : 'none';
+        if (show) visible++;
     });
+    countBadge.innerText = visible + ' véhicules';
+}
 
-    document.querySelectorAll('.alert').forEach(a => {
-        setTimeout(() => a.style.opacity = '0', 4000);
-        setTimeout(() => a.remove(), 4500);
-    });
+searchInput.addEventListener('input', filterVehicules);
+filterPlaces.addEventListener('change', filterVehicules);
+filterClim.addEventListener('change', filterVehicules);
+resetBtn.addEventListener('click', () => { searchInput.value = ''; filterPlaces.value = ''; filterClim.value = ''; filterVehicules(); });
+
+function showToast(message, type) {
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : 'info-circle'}"></i> ${message}`;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}
+
+const themeToggle = document.getElementById('themeToggle');
+if (localStorage.getItem('theme') === 'light') {
+    document.body.classList.add('light-mode');
+    themeToggle.innerHTML = '<i class="fas fa-sun"></i>';
+}
+themeToggle.addEventListener('click', () => {
+    document.body.classList.toggle('light-mode');
+    const isLight = document.body.classList.contains('light-mode');
+    localStorage.setItem('theme', isLight ? 'light' : 'dark');
+    themeToggle.innerHTML = isLight ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
+    showToast(isLight ? 'Mode clair activé' : 'Mode sombre activé', 'info');
+});
 </script>
 </body>
 </html>

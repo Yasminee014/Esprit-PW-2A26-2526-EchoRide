@@ -175,6 +175,43 @@ $vehicule = $vehicule ?? null;
             border-radius:10px;
             margin-bottom:1rem;
         }
+        /* Styles pour l'upload de photo */
+        .file-input {
+            padding: 0.5rem;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(97,179,250,0.3);
+            border-radius: 10px;
+            color: #fff;
+            width: 100%;
+            cursor: pointer;
+        }
+        .photo-preview {
+            margin-top: 10px;
+            text-align: center;
+        }
+        .photo-preview img {
+            max-width: 150px;
+            max-height: 150px;
+            border-radius: 10px;
+            border: 2px solid #61B3FA;
+            object-fit: cover;
+        }
+        .current-photo {
+            margin-bottom: 10px;
+            padding: 10px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 10px;
+            text-align: center;
+        }
+        .current-photo img {
+            max-width: 120px;
+            border-radius: 8px;
+        }
+        .current-photo p {
+            font-size: 0.7rem;
+            color: #A7A9AC;
+            margin-top: 5px;
+        }
     </style>
 </head>
 <body>
@@ -206,7 +243,8 @@ $vehicule = $vehicule ?? null;
         </div>
     <?php endif; ?>
 
-    <form method="POST" action="mes_vehicules.php" id="vehiculeForm" novalidate>
+    <!-- ⚠️ AJOUTER enctype="multipart/form-data" ⚠️ -->
+    <form method="POST" action="mes_vehicules.php" id="vehiculeForm" novalidate enctype="multipart/form-data">
         <input type="hidden" name="action" value="<?= $isEditMode ? 'update' : 'create' ?>">
         <?php if ($isEditMode && $vehicule): ?>
             <input type="hidden" name="id" value="<?= $vehicule['id'] ?>">
@@ -260,6 +298,27 @@ $vehicule = $vehicule ?? null;
             <label for="climatisation"><i class="fas fa-snowflake"></i> Climatisation</label>
         </div>
 
+        <!-- ========== NOUVEAU : UPLOAD DE PHOTO ========== -->
+        <div class="form-group">
+            <label><i class="fas fa-image"></i> Photo du véhicule</label>
+            
+            <?php if ($isEditMode && !empty($vehicule['photo']) && file_exists(__DIR__ . '/../../assets/uploads/vehicules/' . $vehicule['photo'])): ?>
+            <div class="current-photo">
+                <img src="../assets/uploads/vehicules/<?= $vehicule['photo'] ?>" alt="Photo actuelle">
+                <p>Photo actuelle</p>
+            </div>
+            <?php endif; ?>
+            
+            <input type="file" name="photo" id="photo" accept="image/jpeg,image/png,image/jpg" class="file-input">
+            <small style="color: #A7A9AC; display: block; margin-top: 5px;">Formats acceptés : JPG, PNG (max 2MB). Laissez vide pour conserver l'image actuelle.</small>
+            
+            <div id="photoPreview" class="photo-preview" style="display: none;">
+                <img id="previewImg" src="#" alt="Aperçu">
+            </div>
+            <span class="field-error" id="photoError"></span>
+        </div>
+        <!-- ========== FIN UPLOAD PHOTO ========== -->
+
         <div class="form-actions">
             <a href="mes_vehicules.php" class="btn-secondary"><i class="fas fa-times"></i> Annuler</a>
             <button type="submit" class="btn-primary" id="submitBtn"><i class="fas fa-save"></i> Enregistrer</button>
@@ -292,6 +351,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const capaciteInput = document.getElementById('capacite');
     const statutInput = document.getElementById('statut');
     const submitBtn = document.getElementById('submitBtn');
+    const photoInput = document.getElementById('photo');
+    const photoPreview = document.getElementById('photoPreview');
+    const previewImg = document.getElementById('previewImg');
+    const photoError = document.getElementById('photoError');
 
     // Regex pour l'immatriculation
     const IMMAT_REGEX = /^[A-Z]{2}-\d{3}-[A-Z]{2}$/;
@@ -452,6 +515,55 @@ document.addEventListener('DOMContentLoaded', function() {
         return true;
     }
 
+    // ========== VALIDATION PHOTO (optionnelle) ==========
+    function validatePhoto() {
+        if (photoInput && photoInput.files.length > 0) {
+            const file = photoInput.files[0];
+            const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg'];
+            const maxSize = 2 * 1024 * 1024; // 2MB
+            
+            if (!allowedTypes.includes(file.type)) {
+                if (photoError) photoError.textContent = 'Format non autorisé. Utilisez JPG ou PNG.';
+                photoInput.style.borderColor = '#e74c3c';
+                return false;
+            }
+            
+            if (file.size > maxSize) {
+                if (photoError) photoError.textContent = 'Fichier trop volumineux (max 2MB).';
+                photoInput.style.borderColor = '#e74c3c';
+                return false;
+            }
+            
+            if (photoError) photoError.textContent = '';
+            photoInput.style.borderColor = '#27ae60';
+            return true;
+        }
+        if (photoError) photoError.textContent = '';
+        return true;
+    }
+
+    // Aperçu de la photo
+    if (photoInput) {
+        photoInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    if (previewImg) {
+                        previewImg.src = event.target.result;
+                        if (photoPreview) photoPreview.style.display = 'block';
+                    }
+                };
+                reader.readAsDataURL(file);
+                validatePhoto();
+            } else {
+                if (photoPreview) photoPreview.style.display = 'none';
+                if (previewImg) previewImg.src = '#';
+            }
+        });
+    }
+
     // Validation globale avant soumission
     form.addEventListener('submit', function(e) {
         const isMarqueValid = validateMarque();
@@ -460,34 +572,33 @@ document.addEventListener('DOMContentLoaded', function() {
         const isCouleurValid = validateCouleur();
         const isCapaciteValid = validateCapacite();
         const isStatutValid = validateStatut();
+        const isPhotoValid = validatePhoto();
         
-        if (!isMarqueValid || !isModeleValid || !isImmatValid || !isCouleurValid || !isCapaciteValid || !isStatutValid) {
+        if (!isMarqueValid || !isModeleValid || !isImmatValid || !isCouleurValid || !isCapaciteValid || !isStatutValid || !isPhotoValid) {
             e.preventDefault();
             
-            // Afficher un message d'erreur global
             let errorMsg = '❌ Veuillez corriger les erreurs suivantes :\n';
             if (!isMarqueValid) errorMsg += '- La marque est invalide\n';
             if (!isModeleValid) errorMsg += '- Le modèle est invalide\n';
             if (!isImmatValid) errorMsg += '- L\'immatriculation est invalide\n';
             if (!isCouleurValid) errorMsg += '- La couleur est invalide\n';
             if (!isCapaciteValid) errorMsg += '- La capacité est invalide (1-9 places)\n';
+            if (!isPhotoValid) errorMsg += '- La photo est invalide (format JPG/PNG, max 2MB)\n';
             
             alert(errorMsg);
             
-            // Scroll vers le premier champ en erreur
             const firstError = document.querySelector('.invalid');
             if (firstError) {
                 firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 firstError.focus();
             }
         } else {
-            // Désactiver le bouton pour éviter double soumission
             submitBtn.disabled = true;
             submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enregistrement...';
         }
     });
 
-    // Validation en temps réel (au fur et à mesure de la saisie)
+    // Validation en temps réel
     if (marqueInput) {
         marqueInput.addEventListener('input', validateMarque);
         marqueInput.addEventListener('blur', validateMarque);
@@ -520,7 +631,7 @@ document.addEventListener('DOMContentLoaded', function() {
         statutInput.addEventListener('change', validateStatut);
     }
 
-    // Formatage automatique de l'immatriculation à la sortie du champ
+    // Formatage automatique de l'immatriculation
     if (immatInput) {
         immatInput.addEventListener('blur', function() {
             let val = this.value.toUpperCase();

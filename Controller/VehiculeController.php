@@ -174,43 +174,62 @@ class VehiculeController {
     }
 
     public function foCreate(): void {
-    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            header('Location: mes_vehicules.php');
+            exit;
+        }
+
+        // Gérer l'upload de la photo
+        $photoName = null;
+        if (isset($_FILES['photo']) && $_FILES['photo']['error'] === UPLOAD_ERR_OK) {
+            $uploadDir = __DIR__ . '/../assets/uploads/vehicules/';
+            
+            if (!is_dir($uploadDir)) {
+                mkdir($uploadDir, 0777, true);
+            }
+            
+            $extension = pathinfo($_FILES['photo']['name'], PATHINFO_EXTENSION);
+            $allowedExtensions = ['jpg', 'jpeg', 'png'];
+            
+            if (in_array(strtolower($extension), $allowedExtensions)) {
+                $photoName = uniqid('vehicule_') . '.' . $extension;
+                $uploadPath = $uploadDir . $photoName;
+                move_uploaded_file($_FILES['photo']['tmp_name'], $uploadPath);
+            }
+        }
+
+        $data = [
+            'user_id' => $_SESSION['user_id'] ?? 0,
+            'marque' => trim($_POST['marque'] ?? ''),
+            'modele' => trim($_POST['modele'] ?? ''),
+            'immatriculation' => strtoupper(trim($_POST['immatriculation'] ?? '')),
+            'couleur' => trim($_POST['couleur'] ?? ''),
+            'capacite' => intval($_POST['capacite'] ?? 4),
+            'climatisation' => isset($_POST['climatisation']) ? 1 : 0,
+            'statut' => $_POST['statut'] ?? 'disponible',
+            'photo' => $photoName
+        ];
+
+        $errors = $this->model->validate($data);
+        
+        if ($this->model->immatriculationExists($data['immatriculation'])) {
+            $errors[] = "Cette immatriculation (" . htmlspecialchars($data['immatriculation']) . ") est déjà utilisée par un autre véhicule.";
+        }
+        
+        if (empty($errors)) {
+            if ($this->model->create($data)) {
+                $_SESSION['success'] = 'Véhicule ajouté avec succès.';
+            } else {
+                $_SESSION['errors'] = ['Erreur lors de l\'ajout.'];
+            }
+        } else {
+            $_SESSION['errors'] = $errors;
+            $_SESSION['old'] = $data;
+        }
+
         header('Location: mes_vehicules.php');
         exit;
     }
-
-    $data = [
-        'user_id' => $_SESSION['user_id'] ?? 0,
-        'marque' => trim($_POST['marque'] ?? ''),
-        'modele' => trim($_POST['modele'] ?? ''),
-        'immatriculation' => strtoupper(trim($_POST['immatriculation'] ?? '')),
-        'couleur' => trim($_POST['couleur'] ?? ''),
-        'capacite' => intval($_POST['capacite'] ?? 4),
-        'climatisation' => isset($_POST['climatisation']) ? 1 : 0,
-        'statut' => $_POST['statut'] ?? 'disponible'
-    ];
-
-    $errors = $this->model->validate($data);
-    
-    // ✅ AJOUTER CETTE VÉRIFICATION
-    if ($this->model->immatriculationExists($data['immatriculation'])) {
-        $errors[] = "Cette immatriculation (" . htmlspecialchars($data['immatriculation']) . ") est déjà utilisée par un autre véhicule.";
-    }
-    
-    if (empty($errors)) {
-        if ($this->model->create($data)) {
-            $_SESSION['success'] = 'Véhicule ajouté avec succès.';
-        } else {
-            $_SESSION['errors'] = ['Erreur lors de l\'ajout.'];
-        }
-    } else {
-        $_SESSION['errors'] = $errors;
-        $_SESSION['old'] = $data;
-    }
-
-    header('Location: mes_vehicules.php');
-    exit;
-}
 
     public function foUpdate(): void {
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -275,7 +294,6 @@ class VehiculeController {
     }
 
     /* ─────────────────── UTILITAIRE ─────────────────── */
-
     private function sanitize(array $data): array {
         return [
             'user_id'          => intval($data['user_id'] ?? 0) ?: intval($_SESSION['user_id'] ?? 0),
@@ -289,3 +307,4 @@ class VehiculeController {
         ];
     }
 }
+?>

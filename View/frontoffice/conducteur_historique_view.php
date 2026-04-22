@@ -71,19 +71,8 @@
 </head>
 <body>
 
-<nav class="navbar">
-    <a href="../index.php" class="logo"><i class="fas fa-leaf"></i> EcoRide</a>
-    <nav>
-        <a href="vehicules_disponibles.php"><i class="fas fa-car"></i> Covoiturages</a>
-        <a href="mes_reservations.php"><i class="fas fa-calendar-check"></i> Réservations</a>
-        <a href="mes_vehicules.php"><i class="fas fa-key"></i> Mes véhicules</a>
-        <a href="conducteur_historique.php" class="active"><i class="fas fa-user-clock"></i> Mon historique</a>
-        
-        <a href="../backoffice/admin.php" class="admin-nav"><i class="fas fa-shield-alt"></i> Admin</a>
-
-        <a href="logout.php"><i class="fas fa-sign-out-alt"></i></a>
-    </nav>
-</nav>
+<!-- Au début, après <body> -->
+<?php require_once __DIR__ . '/includes/navbar_user.php'; ?>
 
 <div class="container">
 

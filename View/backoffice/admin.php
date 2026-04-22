@@ -1,7 +1,7 @@
 <?php
 // ══════════════════════════════════════════════
 //  ADMIN.PHP — Page admin unique EcoRide
-//  Sections : Véhicules | Réservations | Historique
+//  Sections : Véhicules | Historique
 // ══════════════════════════════════════════════
 if (session_status() === PHP_SESSION_NONE) session_start();
 require_once __DIR__ . '/../../Config/Database.php';
@@ -14,7 +14,7 @@ $rModel       = new ReservationModel();
 
 // ─── Onglet actif ────────────────────────────
 $tab = $_GET['tab'] ?? 'vehicules';
-if (!in_array($tab, ['vehicules', 'reservations', 'historique'])) $tab = 'vehicules';
+if (!in_array($tab, ['vehicules', 'historique'])) $tab = 'vehicules';
 
 // ══════════════════════════════════════════════
 //  TRAITEMENT DES ACTIONS POST
@@ -24,7 +24,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // ── Véhicules ────────────────────────────
     if ($action === 'vehicule_create') {
+        // Gérer l'upload de la photo
+        $photoName = null;
+        if (isset($_FILES['photo']) && $_FILES['photo']['error'] === UPLOAD_ERR_OK) {
+            $uploadDir = __DIR__ . '/../../assets/uploads/vehicules/';
+            
+            if (!is_dir($uploadDir)) {
+                mkdir($uploadDir, 0777, true);
+            }
+            
+            $extension = pathinfo($_FILES['photo']['name'], PATHINFO_EXTENSION);
+            $allowedExtensions = ['jpg', 'jpeg', 'png'];
+            
+            if (in_array(strtolower($extension), $allowedExtensions)) {
+                $photoName = uniqid('vehicule_') . '.' . $extension;
+                $uploadPath = $uploadDir . $photoName;
+                move_uploaded_file($_FILES['photo']['tmp_name'], $uploadPath);
+            }
+        }
+        
         $data = sanitizeVehicule($_POST);
+        $data['photo'] = $photoName;
+        
         if (empty($data['user_id'])) {
             $first = $db->query("SELECT id FROM users LIMIT 1")->fetch();
             $data['user_id'] = $first ? intval($first['id']) : 1;
@@ -42,7 +63,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'vehicule_update') {
         $id   = intval($_POST['id'] ?? 0);
+        
+        // Gérer l'upload de la photo
+        $photoName = null;
+        if (isset($_FILES['photo']) && $_FILES['photo']['error'] === UPLOAD_ERR_OK) {
+            $uploadDir = __DIR__ . '/../../assets/uploads/vehicules/';
+            
+            if (!is_dir($uploadDir)) {
+                mkdir($uploadDir, 0777, true);
+            }
+            
+            $extension = pathinfo($_FILES['photo']['name'], PATHINFO_EXTENSION);
+            $allowedExtensions = ['jpg', 'jpeg', 'png'];
+            
+            if (in_array(strtolower($extension), $allowedExtensions)) {
+                $photoName = uniqid('vehicule_') . '.' . $extension;
+                $uploadPath = $uploadDir . $photoName;
+                move_uploaded_file($_FILES['photo']['tmp_name'], $uploadPath);
+            }
+        }
+        
         $data = sanitizeVehicule($_POST);
+        if ($photoName) {
+            $data['photo'] = $photoName;
+        }
+        
         $errors = $vModel->validate($data);
         if (empty($errors)) {
             $vModel->update($id, $data)
@@ -70,64 +115,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             : ($_SESSION['errors']  = ['Erreur lors de la suppression.']);
         header('Location: admin.php?tab=vehicules'); exit;
     }
-
-    // ── Réservations ─────────────────────────
-    if ($action === 'resa_statut') {
-        $id     = intval($_POST['id'] ?? 0);
-        $statut = $_POST['statut'] ?? '';
-        if (in_array($statut, ['en_attente','confirmee','annulee'])) {
-            $rModel->updateStatut($id, $statut);
-            $_SESSION['success'] = 'Statut mis à jour.';
-        }
-        header('Location: admin.php?tab=reservations'); exit;
-    }
-
-    if ($action === 'resa_delete') {
-        $id = intval($_POST['id'] ?? 0);
-        $rModel->delete($id)
-            ? ($_SESSION['success'] = 'Réservation supprimée.')
-            : ($_SESSION['errors']  = ['Erreur lors de la suppression.']);
-        header('Location: admin.php?tab=reservations'); exit;
-    }
-
-    // ── Modification réservation ─────────────
-    if ($action === 'resa_update') {
-        $id = intval($_POST['id'] ?? 0);
-        
-        // Récupérer la réservation existante pour avoir vehicule_id et user_id
-        $resa = $rModel->getById($id);
-        
-        if ($resa) {
-            $data = [
-                'vehicule_id' => $resa['vehicule_id'],
-                'user_id' => $resa['user_id'],
-                'trajet_id' => $resa['trajet_id'] ?? null,
-                'date_reservation' => $_POST['date_reservation'] ?? '',
-                'statut' => $_POST['statut'] ?? 'en_attente'
-            ];
-            
-            $errors = [];
-            if (empty($data['date_reservation'])) {
-                $errors[] = 'La date est obligatoire.';
-            }
-            if (!in_array($data['statut'], ['en_attente', 'confirmee', 'annulee'])) {
-                $errors[] = 'Statut invalide.';
-            }
-            
-            if (empty($errors)) {
-                if ($rModel->update($id, $data)) {
-                    $_SESSION['success'] = 'Réservation modifiée avec succès.';
-                } else {
-                    $_SESSION['errors'] = ['Erreur lors de la modification.'];
-                }
-            } else {
-                $_SESSION['errors'] = $errors;
-            }
-        } else {
-            $_SESSION['errors'] = ['Réservation non trouvée.'];
-        }
-        header('Location: admin.php?tab=reservations'); exit;
-    }
 }
 
 // ══════════════════════════════════════════════
@@ -144,16 +131,6 @@ $vStats   = [
     'indisponibles' => $vModel->countByStatut('indisponible'),
 ];
 $users = $db->query("SELECT id, nom, prenom FROM users ORDER BY nom, prenom")->fetchAll();
-
-// ── Réservations ─────────────────────────────
-$rFilter       = $_GET['statut_r'] ?? '';
-$reservations  = $rFilter ? $rModel->filterByStatut($rFilter) : $rModel->getAll();
-$rStats = [
-    'total'      => $rModel->countAll(),
-    'confirmees' => $rModel->countByStatut('confirmee'),
-    'annulees'   => $rModel->countByStatut('annulee'),
-    'en_attente' => $rModel->countByStatut('en_attente'),
-];
 
 // ── Historique ───────────────────────────────
 $hStatut    = $_GET['statut_h']   ?? '';
@@ -175,6 +152,7 @@ function sanitizeVehicule(array $p): array {
         'capacite'        => intval($p['capacite']        ?? 4),
         'climatisation'   => isset($p['climatisation']) ? 1 : 0,
         'statut'          => $p['statut']                ?? 'disponible',
+        'photo'           => $p['photo']                 ?? null,
     ];
 }
 ?>
@@ -250,11 +228,6 @@ nav ul li a:hover i,nav ul li a.active i{color:#fff;}
 .btn-outline{background:rgba(255,255,255,.08);border:1px solid rgba(97,179,250,.3);color:#fff;}
 .btn-outline:hover{background:rgba(25,118,210,.25);border-color:var(--blue-light);}
 
-/* ── FILTERS ── */
-.filters{display:flex;gap:.5rem;margin-bottom:1rem;flex-wrap:wrap;}
-.f{background:rgba(255,255,255,.08);border:1px solid rgba(97,179,250,.2);color:var(--grey);padding:.38rem .9rem;border-radius:14px;font-size:.8rem;cursor:pointer;text-decoration:none;transition:all .25s;}
-.f:hover,.f.on{background:rgba(25,118,210,.22);border-color:var(--blue-light);color:var(--blue-light);}
-
 /* ── TABLE ── */
 .tbl-wrap{background:rgba(255,255,255,.04);border-radius:14px;overflow:hidden;border:1px solid rgba(97,179,250,.1);}
 table{width:100%;border-collapse:collapse;}
@@ -265,15 +238,22 @@ tbody tr:last-child{border-bottom:none;}
 tbody tr:hover{background:rgba(97,179,250,.05);}
 tbody td{padding:.8rem 1rem;font-size:.87rem;vertical-align:middle;}
 code{color:var(--blue-light);font-family:monospace;font-size:.84rem;}
+.car-image-cell{width:70px;}
+.car-image-cell img{width:60px;height:45px;object-fit:cover;border-radius:8px;}
 
 /* ── BADGES ── */
 .badge{display:inline-block;padding:.18rem .65rem;border-radius:11px;font-size:.73rem;font-weight:600;}
 .b-dispo   {background:rgba(39,174,96,.17);color:#27ae60;border:1px solid rgba(39,174,96,.32);}
 .b-indispo {background:rgba(231,76,60,.17);color:#e74c3c;border:1px solid rgba(231,76,60,.32);}
 .b-maint   {background:rgba(230,126,34,.17);color:#e67e22;border:1px solid rgba(230,126,34,.32);}
-.b-attente {background:rgba(241,196,15,.17);color:#f1c40f;border:1px solid rgba(241,196,15,.32);}
-.b-conf    {background:rgba(39,174,96,.17);color:#27ae60;border:1px solid rgba(39,174,96,.32);}
-.b-annul   {background:rgba(231,76,60,.17);color:#e74c3c;border:1px solid rgba(231,76,60,.32);}
+
+/* ── BADGES RÉSERVATIONS ── */
+.resa-stats{display:flex;gap:5px;flex-wrap:wrap;}
+.badge-resa{display:inline-block;padding:.2rem .6rem;border-radius:15px;font-size:.7rem;font-weight:600;}
+.badge-resa.total{background:rgba(97,179,250,.2);color:#61B3FA;border:1px solid rgba(97,179,250,.4);}
+.badge-resa.attente{background:rgba(241,196,15,.2);color:#f1c40f;border:1px solid rgba(241,196,15,.4);}
+.badge-resa.confirmee{background:rgba(39,174,96,.2);color:#27ae60;border:1px solid rgba(39,174,96,.4);}
+.badge-resa.vide{background:rgba(167,169,172,.15);color:#A7A9AC;border:1px solid rgba(167,169,172,.3);}
 
 /* ── SELECTS INLINE ── */
 .st-sel{background:rgba(255,255,255,.08);border:1px solid rgba(97,179,250,.25);color:#fff;padding:.28rem .5rem;border-radius:7px;font-size:.79rem;cursor:pointer;outline:none;font-family:inherit;}
@@ -285,8 +265,9 @@ code{color:var(--blue-light);font-family:monospace;font-size:.84rem;}
 .ic:hover{transform:scale(1.12);}
 .ic-edit{background:rgba(25,118,210,.2);color:var(--blue-light);}
 .ic-del {background:rgba(231,76,60,.18);color:#e74c3c;}
+.btn-edit-link{background:rgba(25,118,210,.2);color:var(--blue-light);padding:0.4rem 0.8rem;border-radius:7px;font-size:.82rem;text-decoration:none;display:inline-flex;align-items:center;gap:5px;transition:all .22s;}
+.btn-edit-link:hover{background:rgba(25,118,210,.4);transform:scale(1.05);}
 
-/* ── EMPTY ── */
 .empty{text-align:center;padding:2.5rem;color:var(--grey);}
 .empty i{font-size:2.2rem;color:rgba(97,179,250,.22);margin-bottom:.7rem;display:block;}
 
@@ -295,44 +276,9 @@ code{color:var(--blue-light);font-family:monospace;font-size:.84rem;}
 .date-row label{color:var(--grey);font-size:.8rem;}
 .date-row input[type=date]{background:rgba(255,255,255,.08);border:1px solid rgba(97,179,250,.25);color:#fff;padding:.42rem .75rem;border-radius:9px;font-size:.8rem;outline:none;font-family:inherit;color-scheme:dark;}
 .date-row input[type=date]:focus{border-color:var(--blue-light);}
-
-/* ── BOUTON MODIFIER (lien) ── */
-.btn-edit-link {
-    background:rgba(25,118,210,.2);
-    color:var(--blue-light);
-    padding:0.4rem 0.8rem;
-    border-radius:7px;
-    font-size:.82rem;
-    text-decoration:none;
-    display:inline-flex;
-    align-items:center;
-    gap:5px;
-    transition:all .22s;
-}
-.btn-edit-link:hover {
-    background:rgba(25,118,210,.4);
-    transform:scale(1.05);
-}
-
-/* ── MODAL ── */
-.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);backdrop-filter:blur(3px);z-index:999;align-items:center;justify-content:center;}
-.overlay.open{display:flex;}
-.modal{background:linear-gradient(145deg,#0D1F3A,#122A4A);border:1px solid rgba(97,179,250,.22);border-radius:18px;padding:1.8rem;width:90%;max-width:500px;max-height:92vh;overflow-y:auto;animation:mIn .28s ease;}
-@keyframes mIn{from{opacity:0;transform:translateY(-18px)}to{opacity:1;transform:translateY(0)}}
-.modal h2{font-size:1.15rem;margin-bottom:1.3rem;display:flex;align-items:center;gap:9px;color:var(--white);}
-.modal h2 i{color:var(--blue-light);}
-.fgrid{display:grid;grid-template-columns:1fr 1fr;gap:.9rem;margin-bottom:.9rem;}
-.fg{margin-bottom:.9rem;}
-.fg label{display:block;font-size:.76rem;color:var(--grey);margin-bottom:.32rem;text-transform:uppercase;letter-spacing:.5px;}
-.fg input,.fg select{width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(97,179,250,.22);color:#fff;padding:.55rem .8rem;border-radius:9px;font-size:.86rem;font-family:inherit;outline:none;transition:all .22s;}
-.fg input:focus,.fg select:focus{border-color:var(--blue-light);}
-.fg input::placeholder{color:var(--grey);}
-.fg select option{background:#0D1F3A;}
-.chk{display:flex;align-items:center;gap:7px;margin-top:.4rem;}
-.chk input{width:17px;height:17px;cursor:pointer;accent-color:var(--blue);}
-.chk label{text-transform:none;letter-spacing:0;color:#fff;font-size:.86rem;}
-.mfooter{display:flex;justify-content:flex-end;gap:.7rem;margin-top:1.4rem;}
-.ferr{color:#e74c3c;font-size:.75rem;margin-top:.2rem;display:block;}
+.filters{display:flex;gap:.5rem;margin-bottom:1rem;flex-wrap:wrap;}
+.f{background:rgba(255,255,255,.08);border:1px solid rgba(97,179,250,.2);color:var(--grey);padding:.38rem .9rem;border-radius:14px;font-size:.8rem;cursor:pointer;text-decoration:none;transition:all .25s;}
+.f:hover,.f.on{background:rgba(25,118,210,.22);border-color:var(--blue-light);color:var(--blue-light);}
 </style>
 </head>
 <body>
@@ -349,7 +295,6 @@ code{color:var(--blue-light);font-family:monospace;font-size:.84rem;}
     <div class="nav-section">Gestion</div>
     <ul>
       <li><a href="?tab=vehicules"    class="<?= $tab==='vehicules'   ?'active':'' ?>"><i class="fas fa-car"></i> Véhicules</a></li>
-      <li><a href="?tab=reservations" class="<?= $tab==='reservations'?'active':'' ?>"><i class="fas fa-calendar-check"></i> Réservations</a></li>
       <li><a href="?tab=historique"   class="<?= $tab==='historique'  ?'active':'' ?>"><i class="fas fa-chart-line"></i> Historique</a></li>
     </ul>
     <hr class="sidebar-sep">
@@ -413,22 +358,51 @@ if ($tab === 'vehicules'): ?>
   <table>
     <thead>
       <tr>
-        <th>#</th><th>Conducteur</th><th>Marque / Modèle</th><th>Immatriculation</th>
-        <th>Places</th><th>Clim</th><th>Statut</th><th>Actions</th>
+        <th>#</th><th>Image</th><th>Conducteur</th><th>Marque / Modèle</th><th>Immatriculation</th>
+        <th>Places</th><th>Clim</th><th>Réservations</th><th>Statut</th><th>Actions</th>
       </tr>
     </thead>
     <tbody>
     <?php if (empty($vehicules)): ?>
-      <tr><td colspan="8"><div class="empty"><i class="fas fa-car-side"></i><p>Aucun véhicule trouvé</p></div></td></tr>
+      <tr><td colspan="10"><div class="empty"><i class="fas fa-car-side"></i><p>Aucun véhicule trouvé</p></div></td></tr>
     <?php else: foreach ($vehicules as $v): ?>
+      <?php
+        $resaStats = $rModel->countByVehiculeId($v['id']);
+        $totalResa = $resaStats['total'] ?? 0;
+        $enAttente = $resaStats['en_attente'] ?? 0;
+        $confirmees = $resaStats['confirmee'] ?? 0;
+        $photoPath = '/ecoride/assets/uploads/vehicules/' . ($v['photo'] ?? '');
+        $fullServerPath = $_SERVER['DOCUMENT_ROOT'] . $photoPath;
+      ?>
       <tr>
         <td><?= $v['id'] ?></td>
+        <td class="car-image-cell">
+          <?php if (!empty($v['photo']) && file_exists($fullServerPath)): ?>
+            <img src="<?= $photoPath ?>" alt="<?= htmlspecialchars($v['marque'] . ' ' . $v['modele']) ?>">
+          <?php else: ?>
+            <div style="width:60px;height:45px;background:#1976D2;border-radius:8px;display:flex;align-items:center;justify-content:center;">
+              <i class="fas fa-car" style="color:white;font-size:20px;"></i>
+            </div>
+          <?php endif; ?>
+        </td>
         <td><?= htmlspecialchars(($v['prenom'] ?? '') . ' ' . ($v['nom'] ?? '')) ?></td>
         <td><strong><?= htmlspecialchars($v['marque']) ?></strong> <?= htmlspecialchars($v['modele']) ?>
-            <?php if ($v['couleur']): ?><small style="color:var(--grey)"> · <?= htmlspecialchars($v['couleur']) ?></small><?php endif; ?></td>
+            <?php if ($v['couleur']): ?><small style="color:var(--grey)"> · <?= htmlspecialchars($v['couleur']) ?></small><?php endif; ?>
+        </td>
         <td><code><?= htmlspecialchars($v['immatriculation']) ?></code></td>
         <td><?= $v['capacite'] ?></td>
         <td><?= $v['climatisation'] ? '<i class="fas fa-snowflake" style="color:var(--blue-light)"></i>' : '<i class="fas fa-minus" style="color:var(--grey)"></i>' ?></td>
+        <td>
+          <?php if ($totalResa == 0): ?>
+            <span class="badge-resa vide">Aucune</span>
+          <?php else: ?>
+            <div class="resa-stats">
+              <span class="badge-resa total">📋 <?= $totalResa ?></span>
+              <?php if ($enAttente > 0): ?><span class="badge-resa attente">⏳ <?= $enAttente ?></span><?php endif; ?>
+              <?php if ($confirmees > 0): ?><span class="badge-resa confirmee">✅ <?= $confirmees ?></span><?php endif; ?>
+            </div>
+          <?php endif; ?>
+        </td>
         <td>
           <form method="POST" style="margin:0;">
             <input type="hidden" name="action" value="vehicule_statut">
@@ -441,120 +415,17 @@ if ($tab === 'vehicules'): ?>
           </form>
         </td>
         <td><div class="acts">
-          <a href="admin_modifier_vehicule.php?id=<?= $v['id'] ?>" class="btn-edit-link" title="Modifier">
-            <i class="fas fa-pen"></i> Modifier
-          </a>
+          <a href="admin_modifier_vehicule.php?id=<?= $v['id'] ?>" class="btn-edit-link"><i class="fas fa-pen"></i> Modifier</a>
           <form method="POST" style="margin:0;" onsubmit="return confirm('Supprimer ce véhicule ?')">
             <input type="hidden" name="action" value="vehicule_delete">
             <input type="hidden" name="id" value="<?= $v['id'] ?>">
-            <button type="submit" class="ic ic-del" title="Supprimer"><i class="fas fa-trash"></i></button>
+            <button type="submit" class="ic ic-del"><i class="fas fa-trash"></i></button>
           </form>
         </div></td>
       </tr>
     <?php endforeach; endif; ?>
     </tbody>
   </table>
-</div>
-
-<?php // ══════════════════════════════════════
-//  ONGLET RÉSERVATIONS
-// ══════════════════════════════════════════
-elseif ($tab === 'reservations'): ?>
-
-<div class="topbar">
-  <h1><i class="fas fa-calendar-check"></i> Gestion des Réservations</h1>
-  <a href="../frontoffice/vehicules_disponibles.php" target="_blank" class="pill-user"><i class="fas fa-user"></i> Espace utilisateur</a>
-  <span class="pill"><i class="fas fa-shield-alt"></i> Admin</span>
-</div>
-
-<div class="stats">
-  <div class="stat"><i class="fas fa-calendar-alt"></i><div class="num"><?= $rStats['total'] ?></div><div class="lbl">Total</div></div>
-  <div class="stat"><i class="fas fa-clock"></i><div class="num"><?= $rStats['en_attente'] ?></div><div class="lbl">En attente</div></div>
-  <div class="stat"><i class="fas fa-check-circle"></i><div class="num"><?= $rStats['confirmees'] ?></div><div class="lbl">Confirmées</div></div>
-  <div class="stat"><i class="fas fa-times-circle"></i><div class="num"><?= $rStats['annulees'] ?></div><div class="lbl">Annulées</div></div>
-</div>
-
-<div class="filters">
-  <a href="?tab=reservations"            class="f <?= $rFilter===''          ?'on':'' ?>">Toutes</a>
-  <a href="?tab=reservations&statut_r=en_attente"  class="f <?= $rFilter==='en_attente' ?'on':'' ?>">⏳ En attente</a>
-  <a href="?tab=reservations&statut_r=confirmee"   class="f <?= $rFilter==='confirmee'  ?'on':'' ?>">✅ Confirmées</a>
-  <a href="?tab=reservations&statut_r=annulee"     class="f <?= $rFilter==='annulee'    ?'on':'' ?>">❌ Annulées</a>
-</div>
-
-<div class="tbl-wrap">
-  <table>
-    <thead>
-      <tr>
-        <th>#</th><th>Passager</th><th>Véhicule</th><th>Immatriculation</th>
-        <th>Date</th><th>Statut</th><th>Actions</th>
-      </tr>
-    </thead>
-    <tbody>
-    <?php if (empty($reservations)): ?>
-      <tr><td colspan="7"><div class="empty"><i class="fas fa-calendar-times"></i><p>Aucune réservation trouvée</p></div></td></tr>
-    <?php else: foreach ($reservations as $r): ?>
-      <tr>
-        <td><?= $r['id'] ?></td>
-        <td><?= htmlspecialchars(($r['passager_prenom'] ?? '') . ' ' . ($r['passager_nom'] ?? '')) ?></td>
-        <td><strong><?= htmlspecialchars($r['marque'] ?? '—') ?></strong> <?= htmlspecialchars($r['modele'] ?? '') ?></td>
-        <td><code><?= htmlspecialchars($r['immatriculation'] ?? '—') ?></code></td>
-        <td><?= date('d/m/Y', strtotime($r['date_reservation'])) ?></td>
-        <td>
-          <form method="POST" style="margin:0;">
-            <input type="hidden" name="action" value="resa_statut">
-            <input type="hidden" name="id"     value="<?= $r['id'] ?>">
-            <select name="statut" class="st-sel" onchange="this.form.submit()">
-              <option value="en_attente" <?= $r['statut']==='en_attente'?'selected':'' ?>>⏳ En attente</option>
-              <option value="confirmee"  <?= $r['statut']==='confirmee' ?'selected':'' ?>>✅ Confirmée</option>
-              <option value="annulee"    <?= $r['statut']==='annulee'   ?'selected':'' ?>>❌ Annulée</option>
-            </select>
-          </form>
-        </td>
-        <td class="acts">
-          <button class="ic ic-edit" title="Modifier la réservation"
-            onclick="openEditReservation(<?= $r['id'] ?>, '<?= $r['date_reservation'] ?>', '<?= $r['statut'] ?>')">
-            <i class="fas fa-pen"></i>
-          </button>
-          <form method="POST" style="margin:0;" onsubmit="return confirm('Supprimer cette réservation ?')">
-            <input type="hidden" name="action" value="resa_delete">
-            <input type="hidden" name="id" value="<?= $r['id'] ?>">
-            <button type="submit" class="ic ic-del" title="Supprimer"><i class="fas fa-trash"></i></button>
-          </form>
-         </td>
-      </tr>
-    <?php endforeach; endif; ?>
-    </tbody>
-  </table>
-</div>
-
-<!-- MODALE MODIFIER RÉSERVATION -->
-<div class="overlay" id="editResaModal">
-  <div class="modal">
-    <h2><i class="fas fa-edit"></i> Modifier la réservation</h2>
-    <form method="POST" id="editResaForm">
-      <input type="hidden" name="action" value="resa_update">
-      <input type="hidden" name="id" id="editResaId">
-      
-      <div class="fg">
-        <label>Date de réservation</label>
-        <input type="date" name="date_reservation" id="editResaDate" required>
-      </div>
-      
-      <div class="fg">
-        <label>Statut</label>
-        <select name="statut" id="editResaStatut" class="st-sel" style="width:100%;">
-          <option value="en_attente">⏳ En attente</option>
-          <option value="confirmee">✅ Confirmée</option>
-          <option value="annulee">❌ Annulée</option>
-        </select>
-      </div>
-      
-      <div class="mfooter">
-        <button type="button" class="btn btn-outline" onclick="closeEditResaModal()">Annuler</button>
-        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Enregistrer</button>
-      </div>
-    </form>
-  </div>
 </div>
 
 <?php // ══════════════════════════════════════
@@ -648,26 +519,6 @@ document.querySelectorAll('.alert').forEach(a => {
   setTimeout(()=>{ a.style.transition='opacity .5s'; a.style.opacity='0'; },4000);
   setTimeout(()=>a.remove(),4600);
 });
-
-// Modal modification réservation
-const editResaModal = document.getElementById('editResaModal');
-
-function openEditReservation(id, date, statut) {
-    document.getElementById('editResaId').value = id;
-    document.getElementById('editResaDate').value = date;
-    document.getElementById('editResaStatut').value = statut;
-    if(editResaModal) editResaModal.classList.add('open');
-}
-
-function closeEditResaModal() {
-    if(editResaModal) editResaModal.classList.remove('open');
-}
-
-if(editResaModal) {
-    editResaModal.addEventListener('click', function(e) {
-        if(e.target === editResaModal) closeEditResaModal();
-    });
-}
 </script>
 </body>
 </html>

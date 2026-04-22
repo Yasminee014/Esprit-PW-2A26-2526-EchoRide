@@ -10,22 +10,41 @@ $users = $db->query("SELECT id, nom, prenom FROM users ORDER BY nom, prenom")->f
 
 // Traitement du formulaire
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Gérer l'upload de la photo
+    $photoName = null;
+    if (isset($_FILES['photo']) && $_FILES['photo']['error'] === UPLOAD_ERR_OK) {
+        $uploadDir = __DIR__ . '/../../assets/uploads/vehicules/';
+        
+        if (!is_dir($uploadDir)) {
+            mkdir($uploadDir, 0777, true);
+        }
+        
+        $extension = pathinfo($_FILES['photo']['name'], PATHINFO_EXTENSION);
+        $allowedExtensions = ['jpg', 'jpeg', 'png'];
+        
+        if (in_array(strtolower($extension), $allowedExtensions)) {
+            $photoName = uniqid('vehicule_') . '.' . $extension;
+            $uploadPath = $uploadDir . $photoName;
+            move_uploaded_file($_FILES['photo']['tmp_name'], $uploadPath);
+        }
+    }
+    
     $data = [
-        'user_id' => $_SESSION['user_id'] ?? 1,
+        'user_id' => intval($_POST['user_id'] ?? 1),
         'marque' => trim($_POST['marque'] ?? ''),
         'modele' => trim($_POST['modele'] ?? ''),
         'immatriculation' => strtoupper(trim($_POST['immatriculation'] ?? '')),
         'couleur' => trim($_POST['couleur'] ?? ''),
         'capacite' => intval($_POST['capacite'] ?? 4),
         'climatisation' => isset($_POST['climatisation']) ? 1 : 0,
-        'statut' => $_POST['statut'] ?? 'disponible'
+        'statut' => $_POST['statut'] ?? 'disponible',
+        'photo' => $photoName
     ];
     
     $errors = $vehiculeModel->validate($data);
     
-    // Vérification de l'unicité de l'immatriculation
     if ($vehiculeModel->immatriculationExists($data['immatriculation'])) {
-        $errors[] = "Cette immatriculation (" . htmlspecialchars($data['immatriculation']) . ") est déjà utilisée par un autre véhicule.";
+        $errors[] = "Cette immatriculation (" . htmlspecialchars($data['immatriculation']) . ") est déjà utilisée.";
     }
     
     if (empty($errors)) {
@@ -101,6 +120,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             transition:all 0.3s;
         }
         input:focus,select:focus{border-color:#61B3FA;}
+        input[type="file"]{
+            padding:0.5rem;
+            background:rgba(255,255,255,.08);
+        }
         .form-row{
             display:grid;
             grid-template-columns:1fr 1fr;
@@ -160,11 +183,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             border:1px solid rgba(231,76,60,.4);
             color:#e74c3c;
         }
-        .alert-success{
-            background:rgba(39,174,96,.15);
-            border:1px solid rgba(39,174,96,.4);
-            color:#27ae60;
-        }
         .required{color:#e74c3c;}
         .back-link{
             display:inline-block;
@@ -178,9 +196,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             margin-top:0.25rem;
             display:block;
         }
-        .field-success{
-            border-color:#27ae60 !important;
-            background:rgba(39,174,96,.1) !important;
+        .image-preview {
+            margin-top: 10px;
+        }
+        .image-preview img {
+            max-width: 200px;
+            border-radius: 10px;
+            border: 2px solid #61B3FA;
+        }
+        small{
+            color:#A7A9AC;
+            font-size:0.75rem;
+            display:block;
+            margin-top:5px;
         }
     </style>
 </head>
@@ -200,7 +228,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
     <?php endif; ?>
 
-    <form method="POST" id="vehiculeForm">
+    <form method="POST" enctype="multipart/form-data" id="vehiculeForm">
         <div class="form-row">
             <div class="form-group">
                 <label>Marque <span class="required">*</span></label>
@@ -230,7 +258,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <div class="form-row">
             <div class="form-group">
                 <label>Places (1-9) <span class="required">*</span></label>
-                <input type="text" name="capacite" id="capacite" value="<?= htmlspecialchars($_SESSION['old']['capacite'] ?? '4') ?>">
+                <input type="number" name="capacite" id="capacite" min="1" max="9" value="<?= htmlspecialchars($_SESSION['old']['capacite'] ?? '4') ?>">
                 <span class="field-error" id="capaciteError"></span>
             </div>
             <div class="form-group">
@@ -241,6 +269,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <option value="en_maintenance" <?= (($_SESSION['old']['statut'] ?? '') == 'en_maintenance') ? 'selected' : '' ?>>En maintenance</option>
                 </select>
                 <span class="field-error" id="statutError"></span>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Photo du véhicule</label>
+            <input type="file" name="photo" id="photo" accept="image/jpeg,image/png,image/jpg">
+            <small>Formats acceptés : JPG, PNG. Taille max : 5MB</small>
+            <div id="photoPreviewContainer" style="display: none; margin-top: 10px;">
+                <img id="photoPreview" src="#" alt="Aperçu" style="max-width: 200px; border-radius: 10px; border: 2px solid #61B3FA;">
             </div>
         </div>
 
@@ -257,39 +294,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </div>
 
 <script>
-// ═══════════════════════════════════════════════════════════
-//  CONTRÔLE DE SAISIE - Formulaire d'ajout de véhicule
-//  Aucune validation HTML5 n'est utilisée
-// ═══════════════════════════════════════════════════════════
+// Aperçu de la photo
+document.getElementById('photo')?.addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            const preview = document.getElementById('photoPreview');
+            const container = document.getElementById('photoPreviewContainer');
+            preview.src = event.target.result;
+            container.style.display = 'block';
+        }
+        reader.readAsDataURL(file);
+    }
+});
 
+// Validation JS
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('vehiculeForm');
     if (!form) return;
 
-    // Supprimer les attributs de validation HTML5
-    const inputs = form.querySelectorAll('input, select');
-    inputs.forEach(input => {
-        input.removeAttribute('required');
-        input.removeAttribute('pattern');
-        input.removeAttribute('min');
-        input.removeAttribute('max');
-    });
-
-    // Références des champs
     const marqueInput = document.getElementById('marque');
     const modeleInput = document.getElementById('modele');
     const immatInput = document.getElementById('immatriculation');
-    const couleurInput = document.getElementById('couleur');
     const capaciteInput = document.getElementById('capacite');
-    const statutInput = document.getElementById('statut');
 
-    // Fonctions d'affichage d'erreur
     function showError(input, message) {
         if (!input) return;
         const errorSpan = document.getElementById(input.id + 'Error');
         if (errorSpan) errorSpan.innerHTML = '<i class="fas fa-exclamation-circle"></i> ' + message;
         input.style.borderColor = '#e74c3c';
-        input.style.backgroundColor = 'rgba(231,76,60,.1)';
     }
 
     function clearError(input) {
@@ -297,10 +331,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const errorSpan = document.getElementById(input.id + 'Error');
         if (errorSpan) errorSpan.innerHTML = '';
         input.style.borderColor = '';
-        input.style.backgroundColor = '';
     }
 
-    // Validations individuelles
     function validateMarque() {
         const value = marqueInput?.value.trim() || '';
         if (!value) {
@@ -309,14 +341,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         if (value.length < 2) {
             showError(marqueInput, 'La marque doit contenir au moins 2 caractères.');
-            return false;
-        }
-        if (value.length > 50) {
-            showError(marqueInput, 'La marque ne doit pas dépasser 50 caractères.');
-            return false;
-        }
-        if (!/^[a-zA-ZÀ-ÿ0-9\s\-]+$/.test(value)) {
-            showError(marqueInput, 'Lettres, chiffres, espaces et tirets uniquement.');
             return false;
         }
         clearError(marqueInput);
@@ -333,14 +357,6 @@ document.addEventListener('DOMContentLoaded', function() {
             showError(modeleInput, 'Le modèle doit contenir au moins 2 caractères.');
             return false;
         }
-        if (value.length > 50) {
-            showError(modeleInput, 'Le modèle ne doit pas dépasser 50 caractères.');
-            return false;
-        }
-        if (!/^[a-zA-ZÀ-ÿ0-9\s\-]+$/.test(value)) {
-            showError(modeleInput, 'Lettres, chiffres, espaces et tirets uniquement.');
-            return false;
-        }
         clearError(modeleInput);
         return true;
     }
@@ -348,7 +364,6 @@ document.addEventListener('DOMContentLoaded', function() {
     function validateImmatriculation() {
         let value = immatInput?.value.trim().toUpperCase() || '';
         const immatRegex = /^[A-Z]{2}-\d{3}-[A-Z]{2}$/;
-        
         if (!value) {
             showError(immatInput, "L'immatriculation est obligatoire.");
             return false;
@@ -359,22 +374,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         immatInput.value = value;
         clearError(immatInput);
-        return true;
-    }
-
-    function validateCouleur() {
-        const value = couleurInput?.value.trim() || '';
-        if (value !== '') {
-            if (value.length > 30) {
-                showError(couleurInput, 'La couleur ne doit pas dépasser 30 caractères.');
-                return false;
-            }
-            if (!/^[a-zA-ZÀ-ÿ\s\-]+$/.test(value)) {
-                showError(couleurInput, 'La couleur ne doit contenir que des lettres.');
-                return false;
-            }
-        }
-        clearError(couleurInput);
         return true;
     }
 
@@ -396,34 +395,17 @@ document.addEventListener('DOMContentLoaded', function() {
         return true;
     }
 
-    function validateStatut() {
-        const value = statutInput?.value;
-        const validStatuts = ['disponible', 'indisponible', 'en_maintenance'];
-        if (!validStatuts.includes(value)) {
-            showError(statutInput, 'Statut invalide.');
-            return false;
-        }
-        clearError(statutInput);
-        return true;
-    }
-
-    // Validation globale avant soumission
     form.addEventListener('submit', function(e) {
         const isMarqueValid = validateMarque();
         const isModeleValid = validateModele();
         const isImmatValid = validateImmatriculation();
-        const isCouleurValid = validateCouleur();
         const isCapaciteValid = validateCapacite();
-        const isStatutValid = validateStatut();
         
-        if (!isMarqueValid || !isModeleValid || !isImmatValid || !isCouleurValid || !isCapaciteValid || !isStatutValid) {
+        if (!isMarqueValid || !isModeleValid || !isImmatValid || !isCapaciteValid) {
             e.preventDefault();
-            const firstError = document.querySelector('.field-error:not(:empty)');
-            if (firstError) firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
     });
 
-    // Validation en temps réel
     if (marqueInput) {
         marqueInput.addEventListener('input', validateMarque);
         marqueInput.addEventListener('blur', validateMarque);
@@ -432,19 +414,10 @@ document.addEventListener('DOMContentLoaded', function() {
         modeleInput.addEventListener('input', validateModele);
         modeleInput.addEventListener('blur', validateModele);
     }
-    if (couleurInput) {
-        couleurInput.addEventListener('input', validateCouleur);
-        couleurInput.addEventListener('blur', validateCouleur);
-    }
     if (capaciteInput) {
         capaciteInput.addEventListener('input', validateCapacite);
         capaciteInput.addEventListener('blur', validateCapacite);
     }
-    if (statutInput) {
-        statutInput.addEventListener('change', validateStatut);
-    }
-    
-    // Auto-uppercase immatriculation
     if (immatInput) {
         immatInput.addEventListener('input', function() {
             this.value = this.value.toUpperCase();
@@ -454,7 +427,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-// Auto-dismiss des alertes
+// Auto-dismiss alerts
 document.querySelectorAll('.alert').forEach(alert => {
     setTimeout(() => {
         alert.style.transition = 'opacity 0.5s';

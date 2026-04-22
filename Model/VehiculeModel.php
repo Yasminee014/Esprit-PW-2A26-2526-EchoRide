@@ -74,18 +74,18 @@ class VehiculeModel {
     }
 
     public function immatriculationExists(string $immatriculation, ?int $excludeId = null): bool {
-    $sql = "SELECT COUNT(*) FROM vehicules WHERE immatriculation = :immat";
-    $params = [':immat' => $immatriculation];
-    
-    if ($excludeId !== null) {
-        $sql .= " AND id != :id";
-        $params[':id'] = $excludeId;
+        $sql = "SELECT COUNT(*) FROM vehicules WHERE immatriculation = :immat";
+        $params = [':immat' => $immatriculation];
+        
+        if ($excludeId !== null) {
+            $sql .= " AND id != :id";
+            $params[':id'] = $excludeId;
+        }
+        
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchColumn() > 0;
     }
-    
-    $stmt = $this->db->prepare($sql);
-    $stmt->execute($params);
-    return $stmt->fetchColumn() > 0;
-}
 
     /* ─────────────────── STATS ─────────────────── */
 
@@ -104,9 +104,9 @@ class VehiculeModel {
     public function create(array $data): bool {
         $stmt = $this->db->prepare("
             INSERT INTO vehicules
-                (user_id, marque, modele, immatriculation, couleur, capacite, climatisation, statut)
+                (user_id, marque, modele, immatriculation, couleur, capacite, climatisation, statut, photo)
             VALUES
-                (:user_id, :marque, :modele, :immatriculation, :couleur, :capacite, :climatisation, :statut)
+                (:user_id, :marque, :modele, :immatriculation, :couleur, :capacite, :climatisation, :statut, :photo)
         ");
         return $stmt->execute([
             ':user_id'         => $data['user_id'],
@@ -117,6 +117,7 @@ class VehiculeModel {
             ':capacite'        => $data['capacite']        ?? 4,
             ':climatisation'   => $data['climatisation']   ?? 0,
             ':statut'          => $data['statut']          ?? 'disponible',
+            ':photo'           => $data['photo']           ?? null
         ]);
     }
 
@@ -131,7 +132,8 @@ class VehiculeModel {
                 couleur         = :couleur,
                 capacite        = :capacite,
                 climatisation   = :climatisation,
-                statut          = :statut
+                statut          = :statut,
+                photo           = :photo
             WHERE id = :id
         ");
         return $stmt->execute([
@@ -143,6 +145,7 @@ class VehiculeModel {
             ':capacite'        => $data['capacite']      ?? 4,
             ':climatisation'   => $data['climatisation'] ?? 0,
             ':statut'          => $data['statut']        ?? 'disponible',
+            ':photo'           => $data['photo']         ?? null
         ]);
     }
 
@@ -194,3 +197,4 @@ class VehiculeModel {
         return $errors;
     }
 }
+?>

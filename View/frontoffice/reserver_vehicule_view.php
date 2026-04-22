@@ -2,19 +2,16 @@
 if (session_status() === PHP_SESSION_NONE) session_start();
 require_once __DIR__ . '/../../Controller/ReservationController.php';
 
-// Récupérer les données du véhicule depuis le contrôleur
 $vehicule = $vehicule ?? null;
 if (!$vehicule) {
     header('Location: vehicules_disponibles.php');
     exit;
 }
 
-// Couleur hex approximative selon le nom
 $couleurMap = [
     'rouge'=>'#e74c3c', 'red'=>'#e74c3c', 'bleu'=>'#1976D2', 'blue'=>'#1976D2',
     'vert'=>'#27ae60', 'green'=>'#27ae60', 'noir'=>'#2c3e50', 'black'=>'#2c3e50',
-    'blanc'=>'#ecf0f1', 'white'=>'#ecf0f1', 'gris'=>'#7f8c8d', 'gray'=>'#7f8c8d', 'grey'=>'#7f8c8d',
-    'jaune'=>'#f1c40f', 'yellow'=>'#f1c40f', 'orange'=>'#e67e22',
+    'blanc'=>'#ecf0f1', 'white'=>'#ecf0f1', 'gris'=>'#7f8c8d', 'jaune'=>'#f1c40f'
 ];
 $couleurNom = strtolower(trim($vehicule['couleur'] ?? 'gris'));
 $couleurHex = $couleurMap[$couleurNom] ?? '#7f8c8d';
@@ -27,234 +24,402 @@ $couleurHex = $couleurMap[$couleurNom] ?? '#7f8c8d';
     <title>Réserver un véhicule | EcoRide</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        * { margin:0; padding:0; box-sizing:border-box; }
-        :root { --bleu-fonce:#1976D2; --bleu-clair:#61B3FA; --gris:#A7A9AC; --dark-bg:#0A1628; }
-        body { font-family:'Poppins','Segoe UI',sans-serif; background:linear-gradient(135deg,var(--dark-bg) 0%,#0D1F3A 100%); color:#fff; min-height:100vh; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0A1628;
+            color: #fff;
+            transition: background 0.3s, color 0.3s;
+        }
+        body.light-mode {
+            background: #f5f5f5;
+            color: #333;
+        }
+        body.light-mode .navbar {
+            background: #fff;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        body.light-mode .navbar .logo,
+        body.light-mode .navbar .dropdown-btn,
+        body.light-mode .navbar .user-info {
+            color: #1976D2;
+        }
+        body.light-mode .dropdown-content {
+            background: #fff;
+            border: 1px solid #e0e0e0;
+        }
+        body.light-mode .dropdown-content a {
+            color: #333;
+        }
+        body.light-mode .vehicule-card,
+        body.light-mode .form-card {
+            background: #fff;
+            border-color: #e0e0e0;
+        }
+        body.light-mode .hero-small {
+            background: linear-gradient(135deg, #1565C0, #0D47A1);
+        }
 
-        /* ── Navbar ── */
-        .navbar { background:linear-gradient(90deg,var(--bleu-fonce),#0F3B6E); padding:1rem 2rem; display:flex; justify-content:space-between; align-items:center; box-shadow:0 4px 20px rgba(0,0,0,.3); position:sticky; top:0; z-index:100; }
-        .navbar .logo { display:flex; align-items:center; gap:10px; font-size:1.3rem; font-weight:700; color:#fff; text-decoration:none; }
-        .navbar .logo i { color:var(--bleu-clair); }
-        .navbar nav a { color:#fff !important; text-decoration:none !important; padding:.5rem 1.2rem; border-radius:25px; font-size:.88rem; font-weight:500; transition:all .3s; border:1px solid rgba(97,179,250,.35); background:rgba(255,255,255,.08); display:inline-flex; align-items:center; gap:8px; margin:0 2px; }
-        .navbar nav a:hover { background:rgba(25,118,210,.3) !important; border-color:#61B3FA !important; }
-        .navbar nav a.active { background:rgba(25,118,210,.35) !important; border-color:#61B3FA !important; color:#61B3FA !important; }
+        .navbar {
+            background: linear-gradient(90deg, #1976D2, #0F3B6E);
+            padding: 0.8rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .nav-left { display: flex; align-items: center; gap: 2rem; }
+        .logo { display: flex; align-items: center; gap: 8px; font-size: 1.3rem; font-weight: 700; color: #fff; text-decoration: none; }
+        .logo i { color: #61B3FA; }
+        .dropdown { position: relative; display: inline-block; }
+        .dropdown-btn {
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            padding: 0.6rem 1.2rem;
+            border: 1px solid rgba(97,179,250,.4);
+            border-radius: 30px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            top: 110%;
+            left: 0;
+            min-width: 220px;
+            background: linear-gradient(145deg, #0D1F3A, #122A4A);
+            border: 1px solid rgba(97,179,250,.3);
+            border-radius: 12px;
+            box-shadow: 0 8px 30px rgba(0,0,0,.4);
+            z-index: 200;
+            overflow: hidden;
+        }
+        .dropdown-content.show { display: block; animation: fadeInDown 0.25s ease; }
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .dropdown-content a {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 0.8rem 1.2rem;
+            color: #fff;
+            text-decoration: none;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+        .dropdown-content a i { width: 20px; color: #61B3FA; }
+        .dropdown-content a:hover { background: rgba(97,179,250,.15); padding-left: 1.5rem; }
+        .dropdown-divider { height: 1px; background: rgba(97,179,250,.2); margin: 0.3rem 0; }
+        .nav-right { display: flex; align-items: center; gap: 1rem; }
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255,255,255,0.1);
+            padding: 0.4rem 1rem;
+            border-radius: 30px;
+            font-size: 0.85rem;
+        }
+        .theme-btn {
+            background: rgba(255,255,255,0.1);
+            border: none;
+            color: #fff;
+            padding: 0.4rem 0.8rem;
+            border-radius: 30px;
+            cursor: pointer;
+        }
 
-        /* ── Layout ── */
-        .container { max-width:900px; margin:0 auto; padding:3rem 2rem; }
+        .container { max-width: 1000px; margin: 0 auto; padding: 2rem; }
 
-        /* ── Breadcrumb ── */
-        .breadcrumb { display:flex; align-items:center; gap:.5rem; font-size:.82rem; color:var(--gris); margin-bottom:2rem; }
-        .breadcrumb a { color:var(--bleu-clair); text-decoration:none; }
-        .breadcrumb a:hover { text-decoration:underline; }
-        .breadcrumb i { font-size:.7rem; }
+        .hero-small {
+            background: linear-gradient(135deg, #1976D2, #0F3B6E);
+            border-radius: 20px;
+            padding: 1.5rem 2rem;
+            margin-bottom: 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .hero-small h2 { font-size: 1.5rem; margin-bottom: 0.3rem; }
+        .hero-small p { color: rgba(255,255,255,0.8); font-size: 0.85rem; }
+        .hero-small-icon { font-size: 3rem; opacity: 0.4; }
 
-        /* ── Page title ── */
-        .page-title { font-size:1.8rem; display:flex; align-items:center; gap:12px; margin-bottom:.5rem; }
-        .page-title i { color:var(--bleu-clair); }
-        .page-subtitle { color:var(--gris); font-size:.9rem; margin-bottom:2.5rem; }
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+        @media (max-width: 700px) { .form-grid { grid-template-columns: 1fr; } }
 
-        /* ── Grid ── */
-        .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:2rem; }
-        @media(max-width:700px){ .form-grid { grid-template-columns:1fr; } }
+        .vehicule-card, .form-card {
+            background: rgba(255,255,255,0.07);
+            border-radius: 20px;
+            overflow: hidden;
+            border: 1px solid rgba(97,179,250,0.2);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        .vehicule-card:hover, .form-card:hover { transform: translateY(-5px); box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
 
-        /* ── Card véhicule ── */
-        .vehicule-card { background:rgba(255,255,255,.06); border:1px solid rgba(97,179,250,.25); border-radius:20px; overflow:hidden; }
-        .car-visual { width:100%; height:180px; display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg,rgba(25,118,210,.3),rgba(97,179,250,.1)); position:relative; }
-        .car-visual svg { width:220px; height:110px; filter:drop-shadow(0 8px 24px rgba(0,0,0,.5)); }
-        .car-badge { position:absolute; bottom:10px; right:12px; background:rgba(0,0,0,.5); backdrop-filter:blur(6px); border:1px solid rgba(255,255,255,.15); border-radius:20px; padding:.25rem .75rem; font-size:.75rem; color:#fff; display:flex; align-items:center; gap:5px; }
-        .color-dot { width:10px; height:10px; border-radius:50%; display:inline-block; }
+        .car-visual {
+            height: 180px;
+            overflow: hidden;
+            position: relative;
+        }
+        .car-visual img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .car-badge {
+            position: absolute;
+            bottom: 10px;
+            right: 12px;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(6px);
+            border-radius: 20px;
+            padding: 0.25rem 0.75rem;
+            font-size: 0.7rem;
+        }
+        .vehicule-info { padding: 1.5rem; }
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.8rem;
+            margin-top: 1rem;
+        }
+        .info-item {
+            background: rgba(255,255,255,0.05);
+            border-radius: 10px;
+            padding: 0.7rem;
+        }
+        .info-item .lbl { font-size: 0.7rem; color: #A7A9AC; text-transform: uppercase; }
+        .info-item .val { font-size: 0.85rem; font-weight: 500; }
 
-        .vehicule-info { padding:1.5rem; }
-        .vehicule-info h2 { font-size:1.3rem; margin-bottom:.3rem; }
-        .vehicule-info h2 span { color:var(--gris); font-weight:400; }
-        .vehicule-info .conducteur { color:var(--gris); font-size:.85rem; margin-bottom:1.2rem; display:flex; align-items:center; gap:6px; }
-        .info-grid { display:grid; grid-template-columns:1fr 1fr; gap:.8rem; }
-        .info-item { background:rgba(255,255,255,.05); border-radius:10px; padding:.7rem .9rem; }
-        .info-item .lbl { font-size:.72rem; color:var(--gris); text-transform:uppercase; letter-spacing:.5px; display:block; margin-bottom:3px; }
-        .info-item .val { font-size:.9rem; font-weight:500; display:flex; align-items:center; gap:6px; }
-        .info-item .val code { color:var(--bleu-clair); font-family:monospace; }
-        .info-item .val .clim-yes { color:var(--bleu-clair); }
-        .info-item .val .clim-no  { color:#f1c40f; }
-
-        /* ── Formulaire ── */
-        .form-card { background:rgba(255,255,255,.06); border:1px solid rgba(97,179,250,.25); border-radius:20px; padding:2rem; display:flex; flex-direction:column; gap:1.5rem; }
-        .form-card h3 { font-size:1.1rem; color:var(--bleu-clair); display:flex; align-items:center; gap:8px; padding-bottom:1rem; border-bottom:1px solid rgba(97,179,250,.15); }
-
-        .form-group { display:flex; flex-direction:column; gap:.5rem; }
-        .form-group label { font-size:.85rem; color:var(--bleu-clair); display:flex; align-items:center; gap:7px; font-weight:500; }
+        .form-card { padding: 2rem; }
+        .form-group { margin-bottom: 1.2rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; color: #61B3FA; font-size: 0.85rem; font-weight: 600; }
         .form-group input, .form-group textarea {
-            background:rgba(255,255,255,.08); border:1px solid rgba(97,179,250,.3);
-            color:#fff; padding:.8rem 1rem; border-radius:12px;
-            font-size:.92rem; outline:none; transition:all .3s; font-family:inherit;
+            width: 100%;
+            padding: 0.8rem;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(97,179,250,0.3);
+            border-radius: 12px;
+            color: #fff;
+            font-size: 0.9rem;
+            outline: none;
         }
-        .form-group input:focus, .form-group textarea:focus { border-color:var(--bleu-clair); background:rgba(97,179,250,.08); }
-        .form-group textarea { resize:vertical; min-height:90px; }
-        .form-group input::placeholder, .form-group textarea::placeholder { color:rgba(167,169,172,.6); }
-        .field-error { color:#e74c3c; font-size:.78rem; margin-top:.25rem; display:block; }
+        .form-group input:focus, .form-group textarea:focus { border-color: #61B3FA; }
+        .field-error { color: #e74c3c; font-size: 0.75rem; margin-top: 0.25rem; display: block; }
 
-        /* ── Alerte ── */
-        .alert { padding:1rem 1.5rem; border-radius:14px; margin-bottom:1.5rem; display:flex; align-items:center; gap:10px; }
-        .alert-error { background:rgba(231,76,60,.15); border:1px solid rgba(231,76,60,.4); color:#e74c3c; }
-
-        /* ── Boutons ── */
-        .form-actions { display:flex; gap:1rem; justify-content:flex-end; margin-top:.5rem; }
+        .form-actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+            margin-top: 1.5rem;
+        }
         .btn-annuler {
-            background:rgba(255,255,255,.08); color:var(--gris);
-            border:1px solid rgba(255,255,255,.2); padding:.85rem 1.8rem;
-            border-radius:12px; font-size:.95rem; cursor:pointer;
-            display:inline-flex; align-items:center; gap:8px; text-decoration:none;
-            transition:all .3s; font-family:inherit;
+            background: rgba(255,255,255,0.08);
+            color: #A7A9AC;
+            border: 1px solid rgba(255,255,255,0.2);
+            padding: 0.7rem 1.5rem;
+            border-radius: 12px;
+            cursor: pointer;
+            text-decoration: none;
         }
-        .btn-annuler:hover { background:rgba(231,76,60,.15); color:#e74c3c; border-color:rgba(231,76,60,.4); }
         .btn-confirmer {
-            background:linear-gradient(135deg,var(--bleu-fonce),var(--bleu-clair));
-            color:#fff; border:none; padding:.85rem 2rem; border-radius:12px;
-            font-size:.95rem; cursor:pointer; display:inline-flex; align-items:center;
-            gap:8px; transition:all .3s; font-family:inherit; font-weight:600;
+            background: linear-gradient(135deg, #1976D2, #61B3FA);
+            color: #fff;
+            border: none;
+            padding: 0.7rem 1.5rem;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 600;
         }
-        .btn-confirmer:hover { transform:translateY(-2px); box-shadow:0 8px 24px rgba(25,118,210,.4); }
+        .btn-confirmer:hover { transform: translateY(-2px); }
+
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 0.8rem 1.5rem;
+            border-radius: 10px;
+            z-index: 1000;
+            animation: slideIn 0.3s ease;
+        }
+        .toast.success { background: #27ae60; color: white; }
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        @media (max-width: 768px) {
+            .navbar { flex-direction: column; gap: 1rem; }
+        }
     </style>
 </head>
 <body>
 
-<!-- Navbar -->
 <nav class="navbar">
-    <a href="../index.php" class="logo"><i class="fas fa-leaf"></i> EcoRide</a>
-    <nav>
-        <a href="vehicules_disponibles.php" class="active"><i class="fas fa-car"></i> Covoiturages</a>
-        <a href="mes_reservations.php"><i class="fas fa-calendar-check"></i> Réservations</a>
-        <a href="mes_vehicules.php"><i class="fas fa-key"></i> Mes véhicules</a>
-        <a href="mon_historique.php"><i class="fas fa-history"></i> Mon historique</a>
-        <a href="../backoffice/admin.php" class="admin-nav"><i class="fas fa-shield-alt"></i> Admin</a>
-        <a href="logout.php"><i class="fas fa-sign-out-alt"></i></a>
-    </nav>
+    <div class="nav-left">
+        <a href="../index.php" class="logo"><i class="fas fa-leaf"></i><span>EcoRide</span></a>
+        <div class="dropdown">
+            <button class="dropdown-btn" onclick="toggleDropdown()"><i class="fas fa-bars"></i><span>Menu</span></button>
+            <div class="dropdown-content" id="dropdownMenu">
+                <a href="vehicules_disponibles.php"><i class="fas fa-car"></i> Covoiturages</a>
+                <a href="mes_reservations.php"><i class="fas fa-calendar-check"></i> Mes réservations</a>
+                <a href="mes_vehicules.php"><i class="fas fa-key"></i> Mes véhicules</a>
+                <a href="mon_historique.php"><i class="fas fa-history"></i> Mon historique</a>
+                <div class="dropdown-divider"></div>
+                <a href="../backoffice/admin.php" class="admin-link"><i class="fas fa-shield-alt"></i> Administration</a>
+                <a href="logout.php" class="logout-link"><i class="fas fa-sign-out-alt"></i> Déconnexion</a>
+            </div>
+        </div>
+    </div>
+    <div class="nav-right">
+        <button id="themeToggle" class="theme-btn"><i class="fas fa-moon"></i></button>
+        <div class="user-info"><i class="fas fa-user-circle"></i><span><?= $_SESSION['user_name'] ?? 'Utilisateur' ?></span></div>
+    </div>
 </nav>
 
 <div class="container">
 
-    <!-- Breadcrumb -->
-    <div class="breadcrumb">
-        <a href="vehicules_disponibles.php"><i class="fas fa-car"></i> Covoiturages</a>
-        <i class="fas fa-chevron-right"></i>
-        <span>Réserver un véhicule</span>
+    <div class="hero-small">
+        <div class="hero-small-content">
+            <h2><i class="fas fa-calendar-plus"></i> Réserver un véhicule</h2>
+            <p>Confirmez votre réservation en quelques clics</p>
+        </div>
+        <div class="hero-small-icon"><i class="fas fa-calendar-check"></i></div>
     </div>
 
-    <!-- Titre -->
-    <h1 class="page-title"><i class="fas fa-calendar-plus"></i> Réserver un véhicule</h1>
-    <p class="page-subtitle">Remplissez le formulaire ci-dessous pour confirmer votre réservation.</p>
-
-    <?php if (!empty($_SESSION['errors'])): ?>
-        <div class="alert alert-error">
-            <i class="fas fa-exclamation-circle"></i>
-            <?php foreach ($_SESSION['errors'] as $e): ?><?= htmlspecialchars($e) ?> <?php endforeach; unset($_SESSION['errors']); ?>
-        </div>
-    <?php endif; ?>
-
     <div class="form-grid">
-
-        <!-- Carte véhicule -->
         <div class="vehicule-card">
             <div class="car-visual">
-                <svg viewBox="0 0 240 100" xmlns="http://www.w3.org/2000/svg">
-                    <g fill="<?= htmlspecialchars($couleurHex) ?>">
-                        <rect x="10" y="55" width="220" height="30" rx="10"/>
-                        <path d="M55 55 Q65 28 90 22 L155 22 Q175 22 185 55 Z"/>
-                        <rect x="200" y="62" width="28" height="14" rx="5"/>
-                        <rect x="12" y="62" width="28" height="14" rx="5"/>
-                    </g>
-                    <path d="M92 53 Q97 32 112 27 L148 27 Q160 27 168 53 Z" fill="rgba(97,179,250,0.5)"/>
-                    <circle cx="65" cy="84" r="14" fill="#1a2030"/>
-                    <circle cx="65" cy="84" r="7" fill="#3a4a60"/>
-                    <circle cx="175" cy="84" r="14" fill="#1a2030"/>
-                    <circle cx="175" cy="84" r="7" fill="#3a4a60"/>
-                    <rect x="205" y="60" width="10" height="6" rx="2" fill="#f1c40f" opacity=".8"/>
-                    <rect x="25" y="60" width="10" height="6" rx="2" fill="#e74c3c" opacity=".6"/>
-                </svg>
+                <img src="../assets/generate_car_image.php?marque=<?= urlencode($vehicule['marque']) ?>&modele=<?= urlencode($vehicule['modele']) ?>&couleur=<?= urlencode($vehicule['couleur'] ?? 'bleu') ?>" 
+                     alt="<?= htmlspecialchars($vehicule['marque'] . ' ' . $vehicule['modele']) ?>">
                 <div class="car-badge">
-                    <span class="color-dot" style="background:<?= htmlspecialchars($couleurHex) ?>"></span>
-                    <?= htmlspecialchars(ucfirst($vehicule['couleur'] ?? '—')) ?> · <?= htmlspecialchars($vehicule['modele']) ?>
+                    <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:<?= $couleurHex ?>;margin-right:5px;"></span>
+                    <?= ucfirst($vehicule['couleur'] ?? '—') ?> · <?= $vehicule['modele'] ?>
                 </div>
             </div>
             <div class="vehicule-info">
-                <h2>
-                    <strong><?= htmlspecialchars($vehicule['marque']) ?></strong>
-                    <span> <?= htmlspecialchars($vehicule['modele']) ?></span>
-                </h2>
-                <div class="conducteur">
-                    <i class="fas fa-user" style="color:var(--bleu-clair)"></i>
-                    <?= htmlspecialchars(($vehicule['prenom'] ?? '') . ' ' . ($vehicule['nom'] ?? '')) ?>
-                </div>
+                <h2><?= htmlspecialchars($vehicule['marque'] . ' ' . $vehicule['modele']) ?></h2>
+                <div class="conducteur"><i class="fas fa-user"></i> <?= htmlspecialchars(($vehicule['prenom'] ?? '') . ' ' . ($vehicule['nom'] ?? '')) ?></div>
                 <div class="info-grid">
-                    <div class="info-item">
-                        <span class="lbl">Immatriculation</span>
-                        <span class="val"><code><?= htmlspecialchars($vehicule['immatriculation']) ?></code></span>
-                    </div>
-                    <div class="info-item">
-                        <span class="lbl">Places</span>
-                        <span class="val"><i class="fas fa-users" style="color:var(--bleu-clair)"></i> <?= $vehicule['capacite'] ?></span>
-                    </div>
-                    <div class="info-item">
-                        <span class="lbl">Couleur</span>
-                        <span class="val">
-                            <span class="color-dot" style="background:<?= htmlspecialchars($couleurHex) ?>; border:1px solid rgba(255,255,255,.2)"></span>
-                            <?= htmlspecialchars(ucfirst($vehicule['couleur'] ?? '—')) ?>
-                        </span>
-                    </div>
-                    <div class="info-item">
-                        <span class="lbl">Climatisation</span>
-                        <span class="val">
-                            <?php if ($vehicule['climatisation']): ?>
-                                <i class="fas fa-snowflake clim-yes"></i> Oui
-                            <?php else: ?>
-                                <i class="fas fa-sun clim-no"></i> Non
-                            <?php endif; ?>
-                        </span>
-                    </div>
+                    <div class="info-item"><div class="lbl">Immatriculation</div><div class="val"><code><?= htmlspecialchars($vehicule['immatriculation']) ?></code></div></div>
+                    <div class="info-item"><div class="lbl">Places</div><div class="val"><i class="fas fa-users"></i> <?= $vehicule['capacite'] ?></div></div>
+                    <div class="info-item"><div class="lbl">Couleur</div><div class="val"><?= ucfirst($vehicule['couleur'] ?? '—') ?></div></div>
+                    <div class="info-item"><div class="lbl">Climatisation</div><div class="val"><?= $vehicule['climatisation'] ? '<i class="fas fa-snowflake"></i> Oui' : '<i class="fas fa-sun"></i> Non' ?></div></div>
                 </div>
             </div>
         </div>
 
-        <!-- Formulaire -->
-        <form method="POST" action="reserver_vehicule.php" id="reservationForm" novalidate>
-            <div class="form-card">
-                <h3><i class="fas fa-calendar-plus"></i> Détails de la réservation</h3>
+        <form method="POST" action="reserver_vehicule.php" id="reservationForm" class="form-card">
+            <h3><i class="fas fa-calendar-plus"></i> Détails de la réservation</h3>
+            <input type="hidden" name="action" value="reserver">
+            <input type="hidden" name="vehicule_id" value="<?= $vehicule['id'] ?>">
 
-                <input type="hidden" name="action" value="reserver">
-                <input type="hidden" name="vehicule_id" value="<?= $vehicule['id'] ?>">
+            <div class="form-group">
+                <label><i class="fas fa-calendar-alt"></i> Date de réservation <span style="color:#e74c3c">*</span></label>
+                <input type="text" name="date_reservation_display" id="dateReservation" placeholder="JJ/MM/AAAA" autocomplete="off">
+                <input type="hidden" name="date_reservation" id="dateReservationHidden">
+                <span class="field-error" id="dateError"></span>
+            </div>
 
-                <div class="form-group">
-                    <label><i class="fas fa-calendar-alt"></i> Date de réservation <span style="color:#e74c3c">*</span></label>
-                    <input type="text" name="date_reservation" id="dateReservation" placeholder="JJ/MM/AAAA" autocomplete="off">
-                    <span class="field-error" id="dateError"></span>
-                </div>
+            <div class="form-group">
+                <label><i class="fas fa-sticky-note"></i> Note (optionnel)</label>
+                <textarea name="note" id="note" rows="3" placeholder="Ex: Je prendrai à 8h devant la gare…"></textarea>
+            </div>
 
-                <div class="form-group">
-                    <label><i class="fas fa-sticky-note"></i> Note (optionnel)</label>
-                    <textarea name="note" id="note" placeholder="Ex: Je prendrai à 8h devant la gare…"><?= htmlspecialchars($_POST['note'] ?? '') ?></textarea>
-                    <span class="field-error" id="noteError"></span>
-                </div>
-
-                <div class="form-actions">
-                    <a href="vehicules_disponibles.php" class="btn-annuler">
-                        <i class="fas fa-times"></i> Annuler
-                    </a>
-                    <button type="submit" class="btn-confirmer">
-                        <i class="fas fa-check"></i> Confirmer la réservation
-                    </button>
-                </div>
+            <div class="form-actions">
+                <a href="vehicules_disponibles.php" class="btn-annuler"><i class="fas fa-times"></i> Annuler</a>
+                <button type="submit" class="btn-confirmer"><i class="fas fa-check"></i> Confirmer</button>
             </div>
         </form>
-
     </div>
 </div>
 
 <script>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Réserver un véhicule | EcoRide</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="../assets/js/validation.js"></script>  <!-- ← AJOUTER CETTE LIGNE -->
-</head>
+function toggleDropdown() { document.getElementById("dropdownMenu").classList.toggle("show"); }
+window.onclick = function(event) {
+    if (!event.target.matches('.dropdown-btn')) {
+        var dropdowns = document.getElementsByClassName("dropdown-content");
+        for (var i = 0; i < dropdowns.length; i++) {
+            if (dropdowns[i].classList.contains('show')) dropdowns[i].classList.remove('show');
+        }
+    }
+}
+
+function formatDate(value) {
+    let cleaned = value.replace(/\D/g, '');
+    if (cleaned.length >= 2 && cleaned.length < 4) cleaned = cleaned.substring(0,2) + '/' + cleaned.substring(2);
+    else if (cleaned.length >= 4 && cleaned.length < 6) cleaned = cleaned.substring(0,2) + '/' + cleaned.substring(2,4) + '/' + cleaned.substring(4);
+    else if (cleaned.length >= 6) cleaned = cleaned.substring(0,2) + '/' + cleaned.substring(2,4) + '/' + cleaned.substring(4,8);
+    return cleaned;
+}
+
+function validateDate() {
+    const input = document.getElementById('dateReservation');
+    const hidden = document.getElementById('dateReservationHidden');
+    const error = document.getElementById('dateError');
+    let value = input.value.trim();
+    if (!value) { error.innerHTML = 'La date est obligatoire.'; return false; }
+    const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (!match) { error.innerHTML = 'Format JJ/MM/AAAA'; return false; }
+    const day = parseInt(match[1]), month = parseInt(match[2]), year = parseInt(match[3]);
+    if (month < 1 || month > 12) { error.innerHTML = 'Mois invalide'; return false; }
+    const daysInMonth = new Date(year, month, 0).getDate();
+    if (day < 1 || day > daysInMonth) { error.innerHTML = 'Jour invalide'; return false; }
+    const selected = new Date(year, month-1, day);
+    const today = new Date(); today.setHours(0,0,0,0);
+    if (selected < today) { error.innerHTML = 'Date non passée'; return false; }
+    error.innerHTML = '';
+    hidden.value = `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    return true;
+}
+
+const dateInput = document.getElementById('dateReservation');
+dateInput.addEventListener('input', function() {
+    let pos = this.selectionStart;
+    let oldLen = this.value.length;
+    let formatted = formatDate(this.value);
+    this.value = formatted;
+    let newLen = formatted.length;
+    this.setSelectionRange(pos + (newLen - oldLen), pos + (newLen - oldLen));
+    validateDate();
+});
+dateInput.addEventListener('blur', validateDate);
+
+document.getElementById('reservationForm').addEventListener('submit', function(e) {
+    if (!validateDate()) e.preventDefault();
+});
+
+function showToast(message, type) {
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `<i class="fas fa-check-circle"></i> ${message}`;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}
+
+const themeToggle = document.getElementById('themeToggle');
+if (localStorage.getItem('theme') === 'light') {
+    document.body.classList.add('light-mode');
+    themeToggle.innerHTML = '<i class="fas fa-sun"></i>';
+}
+themeToggle.addEventListener('click', () => {
+    document.body.classList.toggle('light-mode');
+    const isLight = document.body.classList.contains('light-mode');
+    localStorage.setItem('theme', isLight ? 'light' : 'dark');
+    themeToggle.innerHTML = isLight ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
+    showToast(isLight ? 'Mode clair activé' : 'Mode sombre activé', 'success');
+});
+</script>
 </body>
 </html>
