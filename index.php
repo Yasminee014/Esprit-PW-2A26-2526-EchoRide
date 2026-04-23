@@ -1,7 +1,7 @@
 <?php
+if (session_status() === PHP_SESSION_NONE) session_start();
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
-session_start();
 
 $host = 'localhost';
 $dbname = 'ecoride';
@@ -9,20 +9,20 @@ $user = 'root';
 $pass = '';
 
 try {
-    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $user, $pass);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $user, $pass, [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
+    ]);
 } catch (PDOException $e) {
-    die("Erreur de connexion : " . $e->getMessage());
+    die("Erreur DB : " . $e->getMessage());
 }
 
-// Création table utilisateurs
+// Création des tables (inchangée)
 $pdo->exec("CREATE TABLE IF NOT EXISTS utilisateurs (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     nom VARCHAR(100) NOT NULL,
     email VARCHAR(150) NOT NULL
 )");
-
-// Création table reclamations
 $pdo->exec("CREATE TABLE IF NOT EXISTS reclamations (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     utilisateur_id INT UNSIGNED NOT NULL,
@@ -40,172 +40,109 @@ $pdo->exec("CREATE TABLE IF NOT EXISTS reclamations (
     score_urgence INT NULL DEFAULT 0,
     historique_statut TEXT NULL
 )");
+try { $pdo->exec("ALTER TABLE reclamations ADD COLUMN historique_statut TEXT NULL"); } catch(PDOException $e) {}
 
-// Insertion utilisateurs test
-$stmt = $pdo->query("SELECT COUNT(*) FROM utilisateurs");
-if ($stmt->fetchColumn() == 0) {
-    $pdo->exec("INSERT INTO utilisateurs (id, nom, email) VALUES 
-        (1, 'Jean Dupont', 'jean.dupont@email.com'),
-        (2, 'Sara Benali', 'sara.benali@email.com')");
+// Insertion données test
+if ($pdo->query("SELECT COUNT(*) FROM utilisateurs")->fetchColumn() == 0) {
+    $pdo->exec("INSERT INTO utilisateurs (id, nom, email) VALUES (1, 'Jean Dupont', 'jean@email.com'), (2, 'Sara Benali', 'sara@email.com')");
+}
+if ($pdo->query("SELECT COUNT(*) FROM reclamations")->fetchColumn() == 0) {
+    $pdo->exec("INSERT INTO reclamations (id, utilisateur_id, titre, description, categorie, priorite, statut, date_creation, note_satisfaction, score_urgence, historique_statut) VALUES 
+        (1,1,'Problème de paiement','Débit double','paiement','elevee','en_attente','2025-06-01',NULL,90,'[\"en_attente\"]'),
+        (2,1,'Application plante','Crash Android','technique','moyenne','en_cours','2025-05-28',NULL,60,'[\"en_attente\",\"en_cours\"]'),
+        (3,2,'Conducteur absent','Pas présent','securite','elevee','resolue','2025-05-20',5,95,'[\"en_attente\",\"en_cours\",\"resolue\"]'),
+        (4,2,'Remboursement','Non reçu','paiement','moyenne','rejetee','2025-05-15',2,40,'[\"en_attente\",\"rejetee\"]')");
 }
 
-// Insertion réclamations test
-$stmt = $pdo->query("SELECT COUNT(*) FROM reclamations");
-if ($stmt->fetchColumn() == 0) {
-    $pdo->exec("INSERT INTO reclamations (id, utilisateur_id, titre, description, categorie, priorite, statut, date_creation, note_satisfaction, score_urgence) VALUES 
-        (1, 1, 'Problème de paiement', 'Mon paiement a été débité deux fois', 'paiement', 'elevee', 'en_attente', '2025-06-01', NULL, 90),
-        (2, 1, 'Application plante', 'L\\'application crash au démarrage', 'technique', 'moyenne', 'resolue', '2025-05-28', 5, 60),
-        (3, 2, 'Conducteur absent', 'Le conducteur n\\'est pas venu', 'autre', 'elevee', 'en_cours', '2025-05-20', NULL, 95)");
-}
-
-// ═══════════════════════════════════════════════════════
-// 🔒 SÉCURITÉ ADMIN - MOT DE PASSE
-// ═══════════════════════════════════════════════════════
-$admin_password_hash = password_hash('admin123', PASSWORD_DEFAULT);
-
-if (isset($_POST['admin_password'])) {
-    if (password_verify($_POST['admin_password'], $admin_password_hash)) {
-        $_SESSION['admin_authenticated'] = true;
-        $_SESSION['role'] = 'admin';
-        $_SESSION['user_id'] = 1;
-        unset($_SESSION['pending_admin']);
-    } else {
-        $login_error = 'Mot de passe incorrect !';
-    }
-}
-
-if (isset($_GET['switch']) && $_GET['switch'] == 'admin') {
-    if (!isset($_SESSION['admin_authenticated']) || $_SESSION['admin_authenticated'] !== true) {
-        $_SESSION['pending_admin'] = true;
-        header('Location: index.php');
-        exit;
-    }
-}
-
-if (isset($_GET['switch']) && $_GET['switch'] == 'user') {
-    $_SESSION['role'] = 'user';
-    $_SESSION['admin_authenticated'] = false;
+// Gestion du mode via le menu (GET)
+if (isset($_GET['mode']) && $_GET['mode'] == 'gestion') {
+    $_SESSION['view'] = 'gestion';
+    header('Location: index.php');
+    exit;
+} elseif (isset($_GET['mode']) && $_GET['mode'] == 'conducteur') {
+    $_SESSION['view'] = 'conducteur';
     header('Location: index.php');
     exit;
 }
+if (!isset($_SESSION['view'])) $_SESSION['view'] = 'conducteur';
+$isGestion = ($_SESSION['view'] === 'gestion');
 
-$show_admin_login = isset($_SESSION['pending_admin']) && $_SESSION['pending_admin'] === true;
-
-if (!isset($_SESSION['role'])) {
-    $_SESSION['role'] = 'user';
-    $_SESSION['user_id'] = 1;
-    $_SESSION['admin_authenticated'] = false;
-}
-
-$isAdmin = ($_SESSION['role'] === 'admin');
-$currentUserId = $_SESSION['user_id'];
-
-if ($isAdmin && $show_admin_login) {
-    unset($_SESSION['pending_admin']);
-    $show_admin_login = false;
-}
-
-// TRAITEMENT POST
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['admin_password'])) {
+// Traitement POST (CRUD) inchangé
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     
-    if (!$isAdmin && in_array($action, ['reclamation_update', 'reclamation_delete', 'reclamation_statut'])) {
-        $_SESSION['err'] = 'Action non autorisée.';
-        header('Location: index.php');
-        exit;
-    }
-    
     if ($action === 'create_reclamation') {
-        $uid = $isAdmin ? ($_POST['utilisateur_id'] ?? $currentUserId) : $currentUserId;
-        $today = date('Y-m-d');
-        $sql = "INSERT INTO reclamations (utilisateur_id, titre, description, categorie, priorite, statut, date_creation, note_satisfaction, score_urgence) 
-                VALUES (:uid, :titre, :desc, :cat, :prio, 'en_attente', :date_creation, :note, :score)";
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute([
-            ':uid' => $uid,
-            ':titre' => $_POST['titre'],
-            ':desc' => $_POST['description'],
-            ':cat' => $_POST['categorie'],
-            ':prio' => $_POST['priorite'],
-            ':date_creation' => $today,
-            ':note' => $isAdmin && !empty($_POST['note_satisfaction']) ? $_POST['note_satisfaction'] : null,
-            ':score' => $isAdmin ? ($_POST['score_urgence'] ?? 0) : 0
-        ]);
-        $_SESSION['msg'] = '✅ Réclamation ajoutée avec succès !';
+        $errors = [];
+        if (strlen(trim($_POST['titre'])) < 3) $errors[] = 'Titre (min 3)';
+        if (strlen(trim($_POST['description'])) < 10) $errors[] = 'Description (min 10)';
+        if (empty($_POST['categorie'])) $errors[] = 'Catégorie';
+        if (empty($_POST['priorite'])) $errors[] = 'Priorité';
+        if (!empty($errors)) {
+            $_SESSION['err'] = implode(' - ', $errors);
+        } else {
+            $stmt = $pdo->prepare("INSERT INTO reclamations (utilisateur_id, titre, description, categorie, priorite, statut, date_creation, note_satisfaction, score_urgence, historique_statut) 
+                VALUES (1, :titre, :desc, :cat, :prio, 'en_attente', CURDATE(), :note, :score, '[\"en_attente\"]')");
+            $stmt->execute([
+                ':titre' => $_POST['titre'],
+                ':desc' => $_POST['description'],
+                ':cat' => $_POST['categorie'],
+                ':prio' => $_POST['priorite'],
+                ':note' => !empty($_POST['note_satisfaction']) ? $_POST['note_satisfaction'] : null,
+                ':score' => $_POST['score_urgence'] ?? 0
+            ]);
+            $_SESSION['msg'] = '✅ Réclamation ajoutée';
+        }
         header('Location: index.php');
         exit;
     }
     
-    if ($action === 'reclamation_update' && $isAdmin) {
-        $sql = "UPDATE reclamations SET 
-                    titre = :titre,
-                    description = :desc,
-                    categorie = :cat,
-                    priorite = :prio,
-                    statut = :statut,
-                    note_satisfaction = :note,
-                    score_urgence = :score
-                WHERE id = :id";
-        $stmt = $pdo->prepare($sql);
+    if ($action === 'reclamation_update') {
+        $stmt = $pdo->prepare("SELECT historique_statut, statut FROM reclamations WHERE id = :id");
+        $stmt->execute([':id' => $_POST['id']]);
+        $old = $stmt->fetch();
+        $hist = json_decode($old['historique_statut'], true);
+        if ($old['statut'] != $_POST['statut']) $hist[] = $_POST['statut'];
+        $stmt = $pdo->prepare("UPDATE reclamations SET titre=:titre, description=:desc, categorie=:cat, priorite=:prio, statut=:statut, note_satisfaction=:note, score_urgence=:score, reponse_admin=:rep, historique_statut=:hist WHERE id=:id");
         $stmt->execute([
-            ':id' => $_POST['id'],
-            ':titre' => $_POST['titre'],
-            ':desc' => $_POST['description'],
-            ':cat' => $_POST['categorie'],
-            ':prio' => $_POST['priorite'],
-            ':statut' => $_POST['statut'],
+            ':id' => $_POST['id'], ':titre' => $_POST['titre'], ':desc' => $_POST['description'],
+            ':cat' => $_POST['categorie'], ':prio' => $_POST['priorite'], ':statut' => $_POST['statut'],
             ':note' => !empty($_POST['note_satisfaction']) ? $_POST['note_satisfaction'] : null,
-            ':score' => $_POST['score_urgence'] ?? 0
+            ':score' => $_POST['score_urgence'] ?? 0, ':rep' => $_POST['reponse_admin'] ?? null,
+            ':hist' => json_encode($hist)
         ]);
-        $_SESSION['msg'] = '✅ Réclamation modifiée !';
+        $_SESSION['msg'] = '✅ Réclamation modifiée';
         header('Location: index.php');
         exit;
     }
     
-    if ($action === 'reclamation_delete' && $isAdmin) {
+    if ($action === 'reclamation_delete') {
         $stmt = $pdo->prepare("DELETE FROM reclamations WHERE id = :id");
         $stmt->execute([':id' => $_POST['id']]);
-        $_SESSION['msg'] = '✅ Réclamation supprimée !';
+        $_SESSION['msg'] = '✅ Réclamation supprimée';
         header('Location: index.php');
         exit;
     }
     
-    if ($action === 'reclamation_statut' && $isAdmin) {
-        $stmt = $pdo->prepare("UPDATE reclamations SET statut = :statut WHERE id = :id");
-        $stmt->execute([':id' => $_POST['id'], ':statut' => $_POST['statut']]);
-        $_SESSION['msg'] = '✅ Statut mis à jour !';
+    if ($action === 'reclamation_statut') {
+        $stmt = $pdo->prepare("SELECT historique_statut, statut FROM reclamations WHERE id = :id");
+        $stmt->execute([':id' => $_POST['id']]);
+        $old = $stmt->fetch();
+        $hist = json_decode($old['historique_statut'], true);
+        if ($old['statut'] != $_POST['statut']) $hist[] = $_POST['statut'];
+        $stmt = $pdo->prepare("UPDATE reclamations SET statut = :statut, historique_statut = :hist WHERE id = :id");
+        $stmt->execute([':id' => $_POST['id'], ':statut' => $_POST['statut'], ':hist' => json_encode($hist)]);
+        $_SESSION['msg'] = '✅ Statut mis à jour';
         header('Location: index.php');
         exit;
     }
 }
 
 // Récupération des données
-if ($isAdmin) {
-    $stmt = $pdo->query("SELECT r.*, u.nom as utilisateur_nom, u.email as utilisateur_email 
-                         FROM reclamations r 
-                         LEFT JOIN utilisateurs u ON r.utilisateur_id = u.id 
-                         ORDER BY r.date_creation DESC");
-    $reclamations = $stmt->fetchAll();
-    
-    $stmt = $pdo->query("SELECT 
-        COUNT(*) as total, 
-        SUM(statut='en_attente') as en_attente, 
-        SUM(statut='en_cours') as en_cours, 
-        SUM(statut='resolue') as resolue, 
-        SUM(statut='rejetee') as rejetee,
-        SUM(priorite='elevee') as priorite_elevee
-        FROM reclamations");
-    $stats = $stmt->fetch();
-} else {
-    $stmt = $pdo->prepare("SELECT r.*, u.nom as utilisateur_nom, u.email as utilisateur_email 
-                           FROM reclamations r 
-                           LEFT JOIN utilisateurs u ON r.utilisateur_id = u.id 
-                           WHERE r.utilisateur_id = :uid 
-                           ORDER BY r.date_creation DESC");
-    $stmt->execute([':uid' => $currentUserId]);
-    $reclamations = $stmt->fetchAll();
-    $stats = null;
-}
+$reclamations = $pdo->query("SELECT r.*, u.nom as utilisateur_nom, u.email as utilisateur_email FROM reclamations r LEFT JOIN utilisateurs u ON r.utilisateur_id = u.id ORDER BY r.date_creation DESC")->fetchAll();
+$stats = $pdo->query("SELECT COUNT(*) as total, SUM(statut='en_attente') as en_attente, SUM(statut='en_cours') as en_cours, SUM(statut='resolue') as resolue, SUM(statut='rejetee') as rejetee, SUM(priorite='elevee') as priorite_elevee FROM reclamations")->fetch();
+$statsCategorie = $pdo->query("SELECT categorie, COUNT(*) as count FROM reclamations GROUP BY categorie")->fetchAll();
+$statsStatut = $pdo->query("SELECT statut, COUNT(*) as count FROM reclamations GROUP BY statut")->fetchAll();
+$statsMois = $pdo->query("SELECT DATE_FORMAT(date_creation, '%Y-%m') as mois, COUNT(*) as count FROM reclamations GROUP BY mois ORDER BY mois")->fetchAll();
 
 $msg = $_SESSION['msg'] ?? null;
 $err = $_SESSION['err'] ?? null;
@@ -216,31 +153,161 @@ unset($_SESSION['msg'], $_SESSION['err']);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= $isAdmin ? 'Admin - Réclamations' : 'Mes Réclamations' ?> | EcoRide</title>
+    <title>EcoRide - Réclamations</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-
-        :root {
-            --bleu-fonce: #1976D2;
-            --bleu-clair: #61B3FA;
-            --blanc: #F4F5F7;
-            --gris: #A7A9AC;
-            --dark-bg: #0A1628;
-        }
-
         body {
-            font-family: 'Poppins', 'Segoe UI', sans-serif;
-            background: linear-gradient(135deg, var(--dark-bg) 0%, #0D1F3A 100%);
-            color: #FFFFFF;
-            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0A1628;
+            color: #fff;
+            transition: background 0.3s, color 0.3s;
         }
-
+        /* MODE CLAIR */
+        body.light-mode {
+            background: #f5f5f5;
+            color: #333;
+        }
+        body.light-mode .navbar {
+            background: #fff;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        body.light-mode .navbar .logo,
+        body.light-mode .navbar .dropdown-btn,
+        body.light-mode .navbar .user-info {
+            color: #1976D2;
+        }
+        body.light-mode .dropdown-content {
+            background: #fff;
+            border: 1px solid #e0e0e0;
+        }
+        body.light-mode .dropdown-content a {
+            color: #333;
+        }
+        body.light-mode .sidebar {
+            background: #fff;
+            border-right: 1px solid #e0e0e0;
+        }
+        body.light-mode .sidebar nav ul li a {
+            color: #333;
+        }
+        body.light-mode .sidebar nav ul li a i {
+            color: #1976D2;
+        }
+        body.light-mode .form-card,
+        body.light-mode .stat-box,
+        body.light-mode .table-container,
+        body.light-mode .dashboard-container,
+        body.light-mode .chart-card,
+        body.light-mode .modal-content {
+            background: #fff;
+            border-color: #e0e0e0;
+            color: #333;
+        }
+        body.light-mode .form-group input,
+        body.light-mode .form-group select,
+        body.light-mode .form-group textarea {
+            background: #f5f5f5;
+            color: #333;
+            border-color: #ccc;
+        }
+        body.light-mode .btn-submit {
+            background: #1976D2;
+            color: white;
+        }
+        body.light-mode .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border-color: #c3e6cb;
+        }
+        body.light-mode .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border-color: #f5c6cb;
+        }
+        /* NAVBAR (mode conducteur) */
+        .navbar {
+            background: linear-gradient(90deg, #1976D2, #0F3B6E);
+            padding: 0.8rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .nav-left { display: flex; align-items: center; gap: 2rem; }
+        .logo { display: flex; align-items: center; gap: 8px; font-size: 1.3rem; font-weight: 700; color: #fff; text-decoration: none; }
+        .logo i { color: #61B3FA; }
+        .dropdown { position: relative; display: inline-block; }
+        .dropdown-btn {
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            padding: 0.6rem 1.2rem;
+            border: 1px solid rgba(97,179,250,.4);
+            border-radius: 30px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .dropdown-btn:hover { background: rgba(255,255,255,0.2); }
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            top: 110%;
+            left: 0;
+            min-width: 220px;
+            background: linear-gradient(145deg, #0D1F3A, #122A4A);
+            border: 1px solid rgba(97,179,250,.3);
+            border-radius: 12px;
+            box-shadow: 0 8px 30px rgba(0,0,0,.4);
+            z-index: 200;
+            overflow: hidden;
+        }
+        .dropdown-content.show { display: block; animation: fadeInDown 0.25s ease; }
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .dropdown-content a {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 0.8rem 1.2rem;
+            color: #fff;
+            text-decoration: none;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+        .dropdown-content a i { width: 20px; color: #61B3FA; }
+        .dropdown-content a:hover { background: rgba(97,179,250,.15); padding-left: 1.5rem; }
+        .dropdown-divider { height: 1px; background: rgba(97,179,250,.2); margin: 0.3rem 0; }
+        .nav-right { display: flex; align-items: center; gap: 1rem; }
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255,255,255,0.1);
+            padding: 0.4rem 1rem;
+            border-radius: 30px;
+            font-size: 0.85rem;
+        }
+        .theme-btn {
+            background: rgba(255,255,255,0.1);
+            border: none;
+            color: #fff;
+            padding: 0.4rem 0.8rem;
+            border-radius: 30px;
+            cursor: pointer;
+        }
+        /* SIDEBAR (mode gestionnaire) */
         .admin-container { display: flex; min-height: 100vh; }
-
         .sidebar {
             width: 280px;
-            background: linear-gradient(180deg, var(--bleu-fonce) 0%, #0F3B6E 100%);
+            background: linear-gradient(180deg, #1976D2 0%, #0F3B6E 100%);
             backdrop-filter: blur(12px);
             padding: 2rem 1rem;
             position: fixed;
@@ -252,143 +319,173 @@ unset($_SESSION['msg'], $_SESSION['err']);
         .sidebar .logo {
             margin-bottom: 2rem;
             padding-bottom: 1rem;
-            border-bottom: 2px solid var(--bleu-clair);
+            border-bottom: 2px solid #61B3FA;
             text-align: center;
         }
-        .sidebar .logo i { font-size: 48px; color: var(--bleu-clair); margin-bottom: 10px; }
+        .sidebar .logo i { font-size: 48px; color: #61B3FA; margin-bottom: 10px; }
         .sidebar .logo h2 {
-            background: linear-gradient(135deg, #FFF, var(--bleu-clair));
-            -webkit-background-clip: text; background-clip: text; color: transparent;
+            background: linear-gradient(135deg, #FFF, #61B3FA);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
             font-size: 1.5rem;
         }
-        .sidebar .logo p { color: var(--gris); font-size: 0.8rem; }
+        .sidebar .logo p { color: #A7A9AC; font-size: 0.8rem; }
         .sidebar nav ul { list-style: none; }
         .sidebar nav ul li { margin-bottom: 0.5rem; }
         .sidebar nav ul li a {
-            display: flex; align-items: center; gap: 12px;
-            padding: 0.8rem 1rem; color: #FFF; text-decoration: none;
-            border-radius: 12px; transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 0.8rem 1rem;
+            color: #FFF;
+            text-decoration: none;
+            border-radius: 12px;
+            transition: all 0.3s;
         }
-        .sidebar nav ul li a i { width: 24px; color: var(--bleu-clair); }
+        .sidebar nav ul li a i { width: 24px; color: #61B3FA; }
         .sidebar nav ul li a:hover,
         .sidebar nav ul li a.active {
             background: rgba(255,255,255,0.15);
-            border-left: 3px solid var(--bleu-clair);
+            border-left: 3px solid #61B3FA;
         }
-        .main-content { flex: 1; margin-left: 280px; padding: 2rem; }
-
-        .top-bar {
-            display: flex; justify-content: space-between; align-items: center;
-            margin-bottom: 2rem; padding-bottom: 1rem;
-            border-bottom: 2px solid rgba(97,179,250,0.3);
+        .main-content-gestion {
+            flex: 1;
+            margin-left: 280px;
+            padding: 2rem;
         }
-        .top-bar h1 { font-size: 1.8rem; display: flex; align-items: center; gap: 10px; color: var(--blanc); }
-        .top-bar h1 i { color: var(--bleu-clair); }
-        .admin-badge {
-            background: rgba(25,118,210,0.3); border: 1px solid var(--bleu-clair);
-            color: var(--bleu-clair); padding: 0.5rem 1.2rem; border-radius: 25px;
-            display: flex; align-items: center; gap: 8px;
+        /* Conteneur conducteur */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
         }
-        .btn-switch {
-            background: #f39c12; padding: 0.5rem 1.2rem; border-radius: 25px;
-            color: #fff; text-decoration: none; display: inline-flex; align-items: center; gap: 8px;
-            transition: 0.3s;
-        }
-        .btn-switch:hover { background: #e67e22; transform: translateY(-2px); }
-
+        /* Cartes stats */
         .stats-row {
-            display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-            gap: 1.5rem; margin-bottom: 2rem;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
         }
         .stat-box {
-            background: rgba(255,255,255,0.08); backdrop-filter: blur(10px);
-            border-radius: 20px; padding: 1.5rem; text-align: center;
-            transition: all 0.3s; border: 1px solid rgba(97,179,250,0.2);
-            cursor: pointer;
+            background: rgba(255,255,255,0.08);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 1.2rem;
+            text-align: center;
+            border: 1px solid rgba(97,179,250,0.2);
+            transition: 0.3s;
         }
-        .stat-box:hover { transform: translateY(-5px); border-color: var(--bleu-clair); box-shadow: 0 10px 30px rgba(25,118,210,0.2); }
-        .stat-box i { font-size: 2rem; color: var(--bleu-clair); margin-bottom: 0.5rem; }
+        .stat-box:hover { transform: translateY(-5px); border-color: #61B3FA; }
         .stat-box .number {
-            font-size: 2.2rem; font-weight: bold;
-            background: linear-gradient(135deg, var(--bleu-clair), #FFF);
-            -webkit-background-clip: text; background-clip: text; color: transparent;
+            font-size: 2rem;
+            font-weight: bold;
+            background: linear-gradient(135deg, #61B3FA, #FFF);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
         }
-        .stat-box .label { color: var(--gris); margin-top: 0.3rem; font-size: 0.85rem; }
-
-        .actions-bar {
-            display: flex; justify-content: space-between; align-items: center;
-            margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;
+        .stat-box .label {
+            color: #A7A9AC;
+            font-size: 0.85rem;
+            margin-top: 0.5rem;
         }
-        .filters { display: flex; gap: 0.8rem; flex-wrap: wrap; align-items: center; }
-
-        .search-box { position: relative; display: flex; align-items: center; }
-        .search-icon-btn {
-            position: absolute; left: 0; width: 46px; height: 46px;
-            background: linear-gradient(135deg, var(--bleu-fonce), var(--bleu-clair));
-            border-radius: 50%; display: flex; align-items: center; justify-content: center;
-            cursor: pointer; box-shadow: 0 4px 15px rgba(25,118,210,0.45);
-            transition: all 0.3s;
+        /* Formulaire */
+        .form-card {
+            background: rgba(255,255,255,0.06);
+            border-radius: 24px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            border: 1px solid rgba(97,179,250,0.2);
+            max-width: 800px;
+            margin: 0 auto;
         }
-        .search-icon-btn:hover { transform: rotate(15deg) scale(1.1); }
-        .search-icon-btn i { color: #fff; }
-        .search-box input {
-            padding: 0.75rem 1.1rem 0.75rem 3.4rem;
-            border-radius: 30px; border: 1.5px solid rgba(97,179,250,0.35);
-            background: rgba(255,255,255,0.09); color: white; width: 270px;
-            transition: all 0.35s;
+        .form-card h2 {
+            color: #61B3FA;
+            margin-bottom: 1rem;
+            font-size: 1.2rem;
+            border-bottom: 1px solid rgba(97,179,250,0.2);
+            padding-bottom: 0.5rem;
         }
-        .search-box input:focus { outline: none; border-color: var(--bleu-clair); width: 310px; background: rgba(255,255,255,0.14); }
-
-        .filter-wrap { position: relative; display: flex; align-items: center; }
-        .filter-wrap .filter-icon {
-            position: absolute; left: 12px;
-            color: var(--bleu-clair); font-size: 0.8rem;
-            pointer-events: none;
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
         }
-        .filter-select {
-            padding: 0.7rem 1rem 0.7rem 2.2rem; border-radius: 20px;
-            border: 1.5px solid rgba(97,179,250,0.3);
-            background: rgba(255,255,255,0.08); color: white;
+        .form-group-full { grid-column: 1 / -1; }
+        .form-group label {
+            display: block;
+            margin-bottom: 0.3rem;
+            color: #A7A9AC;
+            font-size: 0.8rem;
+        }
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%;
+            padding: 0.6rem 0.8rem;
+            border-radius: 12px;
+            border: 1px solid rgba(97,179,250,0.3);
+            background: rgba(255,255,255,0.08);
+            color: #fff;
+            font-size: 0.85rem;
+        }
+        .btn-submit {
+            background: linear-gradient(135deg, #1976D2, #61B3FA);
+            border: none;
+            padding: 0.7rem 1.5rem;
+            border-radius: 30px;
+            color: white;
+            font-weight: 600;
             cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 1rem;
+            width: 100%;
+            justify-content: center;
         }
-        .filter-select:hover { border-color: var(--bleu-clair); background: rgba(255,255,255,0.12); }
-
-        .btn-add-wrap { display: flex; align-items: center; gap: 10px; }
-        .btn-add-circle {
-            width: 46px; height: 46px;
-            background: linear-gradient(135deg, var(--bleu-fonce), var(--bleu-clair));
-            border: none; border-radius: 50%; cursor: pointer;
-            transition: all 0.3s; box-shadow: 0 4px 15px rgba(25,118,210,0.45);
+        .error-msg {
+            color: #e74c3c;
+            font-size: 0.7rem;
+            margin-top: 0.2rem;
+            display: none;
         }
-        .btn-add-circle:hover { transform: rotate(90deg) scale(1.12); }
-        .btn-add-circle i { color: #fff; font-size: 1.1rem; }
-        .btn-add-label {
-            background: linear-gradient(135deg, var(--bleu-fonce), var(--bleu-clair));
-            color: white; padding: 0.72rem 1.5rem; border: none; border-radius: 30px;
-            cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px;
-            transition: all 0.3s;
+        /* Top bar (gestionnaire) sans boutons de mode */
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
         }
-        .btn-add-label:hover { transform: translateY(-2px); box-shadow: 0 6px 22px rgba(25,118,210,0.5); }
-
+        /* Tableau */
         .table-container {
-            background: rgba(255,255,255,0.05); backdrop-filter: blur(10px);
-            border-radius: 20px; overflow-x: auto;
+            background: rgba(255,255,255,0.05);
+            border-radius: 20px;
+            overflow-x: auto;
             border: 1px solid rgba(97,179,250,0.2);
         }
-        .data-table { width: 100%; border-collapse: collapse; min-width: 1200px; }
-        .data-table th, .data-table td { padding: 0.9rem 1rem; text-align: left; }
-        .data-table th {
-            background: rgba(25,118,210,0.3); color: var(--bleu-clair);
-            font-weight: 600; border-bottom: 2px solid var(--bleu-clair);
-            white-space: nowrap;
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 1000px;
         }
-        .data-table tr { border-bottom: 1px solid rgba(97,179,250,0.1); transition: all 0.3s; }
+        .data-table th, .data-table td {
+            padding: 0.8rem 1rem;
+            text-align: left;
+            font-size: 0.8rem;
+        }
+        .data-table th {
+            background: rgba(25,118,210,0.3);
+            color: #61B3FA;
+            border-bottom: 2px solid #61B3FA;
+        }
+        .data-table tr { border-bottom: 1px solid rgba(97,179,250,0.1); }
         .data-table tr:hover { background: rgba(25,118,210,0.1); }
-
         .badge {
-            padding: 0.3rem 0.75rem; border-radius: 20px;
-            font-size: 0.78rem; font-weight: 600; display: inline-block;
-            white-space: nowrap;
+            padding: 0.2rem 0.5rem;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            display: inline-block;
         }
         .badge-en_attente { background: rgba(241,196,15,0.15); color: #f1c40f; border: 1px solid #f1c40f; }
         .badge-en_cours { background: rgba(52,152,219,0.15); color: #3498db; border: 1px solid #3498db; }
@@ -397,548 +494,328 @@ unset($_SESSION['msg'], $_SESSION['err']);
         .badge-faible { background: rgba(149,165,166,0.15); color: #95a5a6; border: 1px solid #95a5a6; }
         .badge-moyenne { background: rgba(230,126,34,0.15); color: #e67e22; border: 1px solid #e67e22; }
         .badge-elevee { background: rgba(231,76,60,0.15); color: #e74c3c; border: 1px solid #e74c3c; }
-        .badge-technique { background: rgba(97,179,250,0.15); color: var(--bleu-clair); border: 1px solid var(--bleu-clair); }
-        .badge-paiement { background: rgba(155,89,182,0.15); color: #9b59b6; border: 1px solid #9b59b6; }
-        .badge-securite { background: rgba(231,76,60,0.15); color: #e74c3c; border: 1px solid #e74c3c; }
-        .badge-autre { background: rgba(149,165,166,0.15); color: #95a5a6; border: 1px solid #95a5a6; }
-
-        .score-bar {
-            display: flex; align-items: center; gap: 6px;
-        }
-        .score-bar-progress {
-            width: 60px; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;
-        }
-        .score-bar-fill {
-            height: 100%; border-radius: 3px;
-        }
-        .score-text { font-size: 0.75rem; font-weight: bold; }
-
+        .score-bar { display: flex; align-items: center; gap: 5px; }
+        .score-bar-progress { width: 50px; height: 5px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; }
+        .score-bar-fill { height: 100%; border-radius: 3px; }
         .statut-select {
-            background: rgba(25,118,210,0.2); border: 1px solid var(--bleu-clair);
-            color: white; padding: 0.3rem 0.6rem; border-radius: 15px; cursor: pointer;
-            font-size: 0.8rem;
+            background: rgba(25,118,210,0.2);
+            border: 1px solid #61B3FA;
+            color: white;
+            padding: 0.2rem 0.5rem;
+            border-radius: 15px;
+            cursor: pointer;
+            font-size: 0.7rem;
         }
-        .action-buttons { display: flex; gap: 0.5rem; }
+        .action-buttons { display: flex; gap: 0.5rem; flex-wrap: wrap; }
         .btn-icon {
-            background: transparent; border: none; padding: 0.45rem 0.6rem;
-            border-radius: 8px; cursor: pointer; transition: all 0.3s;
+            background: transparent;
+            border: none;
+            padding: 0.3rem 0.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.7rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            transition: 0.2s;
         }
         .btn-icon.view { color: #2ecc71; }
-        .btn-icon.view:hover { background: rgba(46,204,113,0.2); transform: scale(1.1); }
-        .btn-icon.edit { color: var(--bleu-clair); }
-        .btn-icon.edit:hover { background: rgba(97,179,250,0.2); transform: scale(1.1); }
+        .btn-icon.edit { color: #61B3FA; }
         .btn-icon.delete { color: #e74c3c; }
-        .btn-icon.delete:hover { background: rgba(231,76,60,0.2); transform: scale(1.1); }
-
-        .user-info { display: flex; flex-direction: column; }
-        .user-name { font-weight: 600; }
-        .user-email { font-size: 0.75rem; color: var(--gris); }
-
+        .btn-icon.history { color: #9b59b6; }
+        .btn-icon:hover { background: rgba(255,255,255,0.1); transform: scale(1.02); }
+        .stars { color: #f1c40f; font-size: 0.8rem; letter-spacing: 2px; }
+        /* Dashboard */
+        .dashboard-container {
+            background: rgba(255,255,255,0.05);
+            border-radius: 20px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+        .chart-card {
+            background: rgba(255,255,255,0.05);
+            border-radius: 16px;
+            padding: 1rem;
+            text-align: center;
+        }
+        /* Modals */
         .modal {
-            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.8); backdrop-filter: blur(8px);
-            z-index: 1000; justify-content: center; align-items: center;
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            backdrop-filter: blur(8px);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
         }
         .modal-content {
             background: linear-gradient(135deg, #1A2A3A, #0F1A2A);
-            padding: 2rem; border-radius: 24px; width: 92%; max-width: 600px;
-            border: 1px solid var(--bleu-clair);
-            animation: modalSlideIn 0.3s ease;
-            max-height: 90vh; overflow-y: auto;
+            padding: 1.5rem;
+            border-radius: 20px;
+            width: 90%;
+            max-width: 550px;
+            border: 1px solid #61B3FA;
+            max-height: 85vh;
+            overflow-y: auto;
         }
-        @keyframes modalSlideIn {
-            from { opacity: 0; transform: translateY(-30px); }
-            to { opacity: 1; transform: translateY(0); }
+        .modal-content h2 { color: #61B3FA; margin-bottom: 1rem; font-size: 1.1rem; }
+        .detail-row { display: flex; padding: 0.4rem 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.8rem; }
+        .detail-label { width: 110px; color: #A7A9AC; }
+        .detail-value { flex: 1; }
+        .historique-item { display: flex; align-items: center; gap: 10px; padding: 0.4rem 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .historique-dot { width: 8px; height: 8px; border-radius: 50%; }
+        .modal-buttons { display: flex; gap: 0.8rem; justify-content: flex-end; margin-top: 1rem; }
+        .btn-save, .btn-cancel { padding: 0.4rem 0.8rem; border-radius: 20px; cursor: pointer; font-size: 0.8rem; }
+        .btn-save { background: linear-gradient(135deg, #1976D2, #61B3FA); border: none; color: #fff; }
+        .btn-cancel { background: rgba(231,76,60,0.2); border: 1px solid #e74c3c; color: #e74c3c; }
+        .alert-success { background: rgba(46,204,113,0.2); border: 1px solid #2ecc71; padding: 0.5rem 1rem; border-radius: 10px; margin-bottom: 1rem; color: #2ecc71; }
+        .alert-error { background: rgba(231,76,60,0.2); border: 1px solid #e74c3c; padding: 0.5rem 1rem; border-radius: 10px; margin-bottom: 1rem; color: #e74c3c; }
+        footer { text-align: center; padding: 1.5rem 0; color: #A7A9AC; font-size: 0.7rem; margin-top: 2rem; }
+        @media (max-width: 768px) {
+            .sidebar { display: none; }
+            .main-content-gestion { margin-left: 0; }
+            .navbar { flex-direction: column; gap: 1rem; }
+            .stats-row { grid-template-columns: 1fr 1fr; }
+            .form-grid { grid-template-columns: 1fr; }
         }
-        .modal-content h2 { color: var(--bleu-clair); margin-bottom: 1.5rem; display: flex; align-items: center; gap: 10px; }
-        .form-group { margin-bottom: 1rem; }
-        .form-group label { display: block; margin-bottom: 0.3rem; color: var(--gris); font-size: 0.85rem; display: flex; align-items: center; gap: 6px; }
-        .form-group input, .form-group select, .form-group textarea {
-            width: 100%; padding: 0.7rem 1rem; border-radius: 12px;
-            border: 1px solid rgba(97,179,250,0.3);
-            background: rgba(255,255,255,0.08); color: white;
-            font-family: inherit;
-        }
-        .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
-            outline: none; border-color: var(--bleu-clair);
-            background: rgba(255,255,255,0.12);
-        }
-        .modal-buttons { display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1.5rem; }
-        .btn-save {
-            background: linear-gradient(135deg, var(--bleu-fonce), var(--bleu-clair));
-            color: white; padding: 0.7rem 1.8rem; border: none; border-radius: 30px;
-            cursor: pointer; font-weight: 600; transition: all 0.3s;
-        }
-        .btn-save:hover { transform: scale(1.02); box-shadow: 0 5px 15px rgba(25,118,210,0.4); }
-        .btn-cancel {
-            background: rgba(231,76,60,0.2); color: #e74c3c; padding: 0.7rem 1.5rem;
-            border: 1px solid #e74c3c; border-radius: 30px; cursor: pointer;
-            transition: all 0.3s;
-        }
-        .btn-cancel:hover { background: rgba(231,76,60,0.35); }
-
-        .toast {
-            position: fixed; bottom: 2rem; right: 2rem;
-            background: linear-gradient(135deg, var(--bleu-fonce), #0F3B6E);
-            border: 1px solid var(--bleu-clair); color: white;
-            padding: 1rem 1.5rem; border-radius: 15px;
-            display: flex; align-items: center; gap: 10px;
-            animation: toastIn 0.3s ease; z-index: 9999;
-        }
-        @keyframes toastIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-
-        .alert-success {
-            background: rgba(46,204,113,0.2); border: 1px solid #2ecc71;
-            padding: 0.8rem; border-radius: 12px; margin-bottom: 1rem;
-            color: #2ecc71;
-        }
-        .alert-error {
-            background: rgba(231,76,60,0.2); border: 1px solid #e74c3c;
-            padding: 0.8rem; border-radius: 12px; margin-bottom: 1rem;
-            color: #e74c3c;
-        }
-
-        footer { text-align: center; padding: 2rem 0 1rem; color: var(--gris); font-size: 0.85rem; }
-        footer i { color: var(--bleu-clair); }
-        .empty-state { text-align: center; padding: 3rem; color: var(--gris); }
-        .empty-state i { font-size: 3rem; margin-bottom: 1rem; }
-
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); }
-        ::-webkit-scrollbar-thumb { background: var(--bleu-fonce); border-radius: 10px; }
     </style>
 </head>
 <body>
-<div class="admin-container">
 
-    <?php if($show_admin_login): ?>
-    <div class="modal" style="display:flex; z-index:10000;">
-        <div class="modal-content" style="max-width:400px;">
-            <h2><i class="fas fa-shield-alt"></i> Accès Administrateur</h2>
-            <form method="POST">
-                <div class="form-group">
-                    <label>Mot de passe administrateur</label>
-                    <input type="password" name="admin_password" placeholder="Entrez le mot de passe" required autofocus>
-                    <?php if(isset($login_error)): ?>
-                    <p style="color:#e74c3c; margin-top:5px;"><?= $login_error ?></p>
-                    <?php endif; ?>
+<?php if($isGestion): ?>
+    <!-- MODE GESTIONNAIRE : Sidebar -->
+    <div class="admin-container">
+        <aside class="sidebar">
+            <div class="logo">
+                <i class="fas fa-leaf"></i>
+                <h2>EcoRide</h2>
+                <p>Panneau d'administration</p>
+            </div>
+            <nav>
+                <ul>
+                    <li><a href="#"><i class="fas fa-tachometer-alt"></i> Tableau de bord</a></li>
+                    <li><a href="#" class="active"><i class="fas fa-exclamation-circle"></i> Réclamations</a></li>
+                    <li><a href="#"><i class="fas fa-star"></i> Avis</a></li>
+                    <li><a href="#"><i class="fas fa-cog"></i> Paramètres</a></li>
+                    <li><a href="?mode=conducteur"><i class="fas fa-arrow-left"></i> Mes réclamations</a></li>
+                    <li><a href="#"><i class="fas fa-sign-out-alt"></i> Déconnexion</a></li>
+                </ul>
+            </nav>
+        </aside>
+        <main class="main-content-gestion">
+            <div class="top-bar">
+                <h1><i class="fas fa-exclamation-circle"></i> Gestion des Réclamations</h1>
+                <!-- Plus de boutons de mode -->
+            </div>
+<?php else: ?>
+    <!-- MODE CONDUCTEUR : Navbar avec menu -->
+    <nav class="navbar">
+        <div class="nav-left">
+            <a href="#" class="logo"><i class="fas fa-leaf"></i><span>EcoRide</span></a>
+            <div class="dropdown">
+                <button class="dropdown-btn" onclick="toggleDropdown()"><i class="fas fa-bars"></i><span>Menu</span></button>
+                <div class="dropdown-content" id="dropdownMenu">
+                    <a href="?mode=conducteur"><i class="fas fa-exclamation-circle"></i> Mes réclamations</a>
+                    <div class="dropdown-divider"></div>
+                    <a href="?mode=gestion" class="admin-link"><i class="fas fa-shield-alt"></i> Administration</a>
+                    <a href="#" class="logout-link"><i class="fas fa-sign-out-alt"></i> Déconnexion</a>
                 </div>
-                <div class="modal-buttons">
-                    <a href="?switch=user" class="btn-cancel" style="text-decoration:none;">Annuler</a>
-                    <button type="submit" class="btn-save"><i class="fas fa-unlock-alt"></i> Se connecter</button>
+            </div>
+        </div>
+        <div class="nav-right">
+            <button id="themeToggle" class="theme-btn"><i class="fas fa-moon"></i></button>
+            <div class="user-info"><i class="fas fa-user-circle"></i><span>Utilisateur</span></div>
+        </div>
+    </nav>
+    <div class="container">
+        <div class="top-bar">
+            <h1><i class="fas fa-exclamation-circle"></i> Nouvelle réclamation</h1>
+        </div>
+<?php endif; ?>
+
+    <?php if($msg): ?><div class="alert-success"><?= htmlspecialchars($msg) ?></div><?php endif; ?>
+    <?php if($err): ?><div class="alert-error"><?= htmlspecialchars($err) ?></div><?php endif; ?>
+
+    <?php if(!$isGestion): ?>
+        <!-- Mode Conducteur : Formulaire -->
+        <div class="form-card">
+            <h2><i class="fas fa-plus-circle"></i> Nouvelle réclamation</h2>
+            <form method="POST" id="reclamationForm">
+                <input type="hidden" name="action" value="create_reclamation">
+                <div class="form-grid">
+                    <div class="form-group form-group-full"><label><i class="fas fa-heading"></i> Titre *</label><input type="text" name="titre" id="titre" placeholder="Ex: Problème de connexion"><div class="error-msg" id="errTitre">Min 3 caractères</div></div>
+                    <div class="form-group form-group-full"><label><i class="fas fa-align-left"></i> Description *</label><textarea name="description" id="description" rows="3" placeholder="Décrivez votre problème..."></textarea><div class="error-msg" id="errDescription">Min 10 caractères</div></div>
+                    <div class="form-group"><label><i class="fas fa-tag"></i> Catégorie *</label><select name="categorie" id="categorie"><option value="">-- Choisir --</option><option value="technique">Technique</option><option value="paiement">Paiement</option><option value="securite">Sécurité</option><option value="autre">Autre</option></select><div class="error-msg" id="errCategorie">Choisissez une catégorie</div></div>
+                    <div class="form-group"><label><i class="fas fa-fire"></i> Priorité *</label><select name="priorite" id="priorite"><option value="">-- Choisir --</option><option value="faible">Faible</option><option value="moyenne">Moyenne</option><option value="elevee">Élevée</option></select><div class="error-msg" id="errPriorite">Choisissez une priorité</div></div>
+                    <div class="form-group"><label><i class="fas fa-star"></i> Note (1-5)</label><input type="number" name="note_satisfaction" id="note_satisfaction" min="1" max="5" placeholder="1 à 5"></div>
+                    <div class="form-group"><label><i class="fas fa-brain"></i> Score (0-100)</label><input type="number" name="score_urgence" id="score_urgence" min="0" max="100" value="0"></div>
                 </div>
+                <button type="submit" class="btn-submit"><i class="fas fa-paper-plane"></i> Soumettre</button>
             </form>
         </div>
-    </div>
+    <?php else: ?>
+        <!-- Mode Gestionnaire : Statistiques + Tableau + Graphiques -->
+        <div class="stats-row">
+            <div class="stat-box"><div class="number"><?= $stats['total'] ?? 0 ?></div><div class="label">Total</div></div>
+            <div class="stat-box"><div class="number"><?= $stats['en_attente'] ?? 0 ?></div><div class="label">En attente</div></div>
+            <div class="stat-box"><div class="number"><?= $stats['en_cours'] ?? 0 ?></div><div class="label">En cours</div></div>
+            <div class="stat-box"><div class="number"><?= $stats['resolue'] ?? 0 ?></div><div class="label">Résolues</div></div>
+            <div class="stat-box"><div class="number"><?= $stats['rejetee'] ?? 0 ?></div><div class="label">Rejetées</div></div>
+        </div>
+
+        <div style="text-align: right; margin-bottom: 1rem;">
+            <button id="showDashboardBtn" class="btn-switch" style="background: linear-gradient(135deg, #9b59b6, #8e44ad); border: none; padding: 0.5rem 1rem; border-radius: 25px; color: #fff; cursor: pointer;"><i class="fas fa-chart-line"></i> 📊 Tableau de bord</button>
+            <button id="showTableBtn" class="btn-switch" style="display: none; background: linear-gradient(135deg, #9b59b6, #8e44ad); border: none; padding: 0.5rem 1rem; border-radius: 25px; color: #fff; cursor: pointer;"><i class="fas fa-table"></i> 📋 Retour au tableau</button>
+        </div>
+
+        <div id="tableView">
+            <div class="table-container">
+                <table class="data-table">
+                    <thead><tr><th>ID</th><th>Titre</th><th>Utilisateur</th><th>Catégorie</th><th>Date création</th><th>Priorité</th><th>Score</th><th>Statut</th><th>Note</th><th>Actions</th></tr></thead>
+                    <tbody id="reclamationTableBody">
+                        <?php foreach($reclamations as $r): ?>
+                        <tr data-id="<?= $r['id'] ?>" data-statut="<?= $r['statut'] ?>" data-priorite="<?= $r['priorite'] ?>" data-categorie="<?= $r['categorie'] ?>">
+                            <td><code>#<?= $r['id'] ?></code></td>
+                            <td><strong><?= htmlspecialchars(substr($r['titre'], 0, 35)) ?>...</strong></td>
+                            <td><div><span><?= htmlspecialchars($r['utilisateur_nom'] ?? 'ID:'.$r['utilisateur_id']) ?></span><br><span style="font-size:0.65rem;color:var(--gris)"><?= htmlspecialchars($r['utilisateur_email'] ?? '') ?></span></div></td>
+                            <td><span class="badge"><?= $r['categorie'] ?></span></td>
+                            <td><?= date('d/m/Y', strtotime($r['date_creation'])) ?></td>
+                            <td><span class="badge badge-<?= $r['priorite'] ?>"><?= $r['priorite'] ?></span></td>
+                            <td><?php $score = $r['score_urgence'] ?? 0; $color = $score >= 80 ? '#e74c3c' : ($score >= 50 ? '#f1c40f' : '#2ecc71'); ?>
+                            <div class="score-bar"><div class="score-bar-progress"><div class="score-bar-fill" style="width:<?= $score ?>%; background:<?= $color ?>"></div></div><span style="color:<?= $color ?>"><?= $score ?></span></div></td>
+                            <td><form method="POST" style="margin:0"><input type="hidden" name="action" value="reclamation_statut"><input type="hidden" name="id" value="<?= $r['id'] ?>"><select name="statut" class="statut-select" onchange="this.form.submit()"><option value="en_attente" <?= $r['statut']=='en_attente'?'selected':'' ?>>En attente</option><option value="en_cours" <?= $r['statut']=='en_cours'?'selected':'' ?>>En cours</option><option value="resolue" <?= $r['statut']=='resolue'?'selected':'' ?>>Résolue</option><option value="rejetee" <?= $r['statut']=='rejetee'?'selected':'' ?>>Rejetée</option></select></form></td>
+                            <td><?php $note = $r['note_satisfaction']; if($note && $note>=1 && $note<=5) echo '<span class="stars">'.str_repeat('★', $note).str_repeat('☆', 5-$note).'</span>'; else echo '<span style="color:var(--gris)">—</span>'; ?></td>
+                            <td class="action-buttons">
+                                <button class="btn-icon view" onclick='viewDetails(<?= json_encode($r) ?>)'><i class="fas fa-eye"></i> Détails</button>
+                                <button class="btn-icon edit" onclick='openEditModal(<?= json_encode($r) ?>)'><i class="fas fa-edit"></i></button>
+                                <button class="btn-icon history" onclick='showHistory(<?= json_encode($r) ?>)'><i class="fas fa-history"></i></button>
+                                <form method="POST" style="display:inline-block" onsubmit="return confirm('Supprimer ?')"><input type="hidden" name="action" value="reclamation_delete"><input type="hidden" name="id" value="<?= $r['id'] ?>"><button type="submit" class="btn-icon delete"><i class="fas fa-trash"></i></button></form>
+                            </div>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="dashboardView" style="display: none;">
+            <div class="dashboard-container">
+                <h3><i class="fas fa-chart-pie"></i> Statistiques détaillées</h3>
+                <div class="charts-grid">
+                    <div class="chart-card"><canvas id="chartStatut" width="300" height="200"></canvas><p style="margin-top:0.5rem;color:var(--gris);font-size:0.7rem;">Par statut</p></div>
+                    <div class="chart-card"><canvas id="chartCategorie" width="300" height="200"></canvas><p style="margin-top:0.5rem;color:var(--gris);font-size:0.7rem;">Par catégorie</p></div>
+                    <div class="chart-card"><canvas id="chartMois" width="300" height="200"></canvas><p style="margin-top:0.5rem;color:var(--gris);font-size:0.7rem;">Évolution mensuelle</p></div>
+                </div>
+            </div>
+        </div>
     <?php endif; ?>
 
-    <!-- ══════════════ SIDEBAR ══════════════ -->
-    <aside class="sidebar">
-        <div class="logo">
-            <i class="fas fa-leaf"></i>
-            <h2>EcoRide</h2>
-            <p>Panneau d'administration</p>
-        </div>
-        <nav>
-            <ul>
-                <li><a href="#"><i class="fas fa-tachometer-alt"></i> Tableau de bord</a></li>
-                <li><a href="#"><i class="fas fa-users"></i> Utilisateurs</a></li>
-                <li><a href="#"><i class="fas fa-car-side"></i> Véhicules</a></li>
-                <li><a href="#"><i class="fas fa-route"></i> Trajets</a></li>
-                <li><a href="#" class="active"><i class="fas fa-exclamation-circle"></i> Réclamations</a></li>
-                <li><a href="#"><i class="fas fa-search"></i> Lost & Found</a></li>
-                <li><a href="#"><i class="fas fa-calendar-alt"></i> Événements</a></li>
-                <li><a href="#"><i class="fas fa-cog"></i> Paramètres</a></li>
-                <li><a href="#"><i class="fas fa-sign-out-alt"></i> Déconnexion</a></li>
-            </ul>
-        </nav>
-    </aside>
+    <footer><i class="fas fa-leaf"></i> EcoRide - Covoiturage intelligent et écologique</footer>
 
-    <!-- ══════════════ MAIN CONTENT ══════════════ -->
-    <main class="main-content">
-
-        <div class="top-bar">
-            <h1><i class="fas fa-exclamation-circle"></i> Gestion des Réclamations</h1>
-            <div style="display: flex; gap: 1rem;">
-                <?php if($isAdmin): ?>
-                <a href="?switch=user" class="btn-switch" style="background:#e74c3c;">
-                    <i class="fas fa-sign-out-alt"></i> Quitter le mode Admin
-                </a>
-                <?php else: ?>
-                <a href="?switch=admin" class="btn-switch">
-                    <i class="fas fa-shield-alt"></i> Mode Admin
-                </a>
-                <?php endif; ?>
-                <div class="admin-badge">
-                    <i class="fas <?= $isAdmin ? 'fa-shield-alt' : 'fa-user' ?>"></i> 
-                    <?= $isAdmin ? 'Administrateur' : 'Utilisateur' ?>
-                </div>
-            </div>
-        </div>
-
-        <?php if($msg): ?>
-        <div class="alert-success"><i class="fas fa-check-circle"></i> <?= htmlspecialchars($msg) ?></div>
-        <?php endif; ?>
-        <?php if($err): ?>
-        <div class="alert-error"><i class="fas fa-exclamation-triangle"></i> <?= htmlspecialchars($err) ?></div>
-        <?php endif; ?>
-
-        <?php if($isAdmin && isset($stats)): ?>
-        <div class="stats-row">
-            <div class="stat-box"><i class="fas fa-clipboard-list"></i><div class="number"><?= $stats['total'] ?? 0 ?></div><div class="label">Total réclamations</div></div>
-            <div class="stat-box"><i class="fas fa-clock"></i><div class="number"><?= $stats['en_attente'] ?? 0 ?></div><div class="label">En attente</div></div>
-            <div class="stat-box"><i class="fas fa-spinner"></i><div class="number"><?= $stats['en_cours'] ?? 0 ?></div><div class="label">En cours</div></div>
-            <div class="stat-box"><i class="fas fa-check-circle"></i><div class="number"><?= $stats['resolue'] ?? 0 ?></div><div class="label">Résolues</div></div>
-            <div class="stat-box"><i class="fas fa-times-circle"></i><div class="number"><?= $stats['rejetee'] ?? 0 ?></div><div class="label">Rejetées</div></div>
-            <div class="stat-box"><i class="fas fa-fire"></i><div class="number"><?= $stats['priorite_elevee'] ?? 0 ?></div><div class="label">Priorité élevée</div></div>
-        </div>
-        <?php endif; ?>
-
-        <div class="actions-bar">
-            <div class="filters">
-                <div class="search-box">
-                    <div class="search-icon-btn" onclick="document.getElementById('searchInput').focus()">
-                        <i class="fas fa-search"></i>
-                    </div>
-                    <input type="text" id="searchInput" placeholder="Rechercher une réclamation...">
-                </div>
-
-                <?php if($isAdmin): ?>
-                <div class="filter-wrap">
-                    <i class="fas fa-chart-line filter-icon"></i>
-                    <select class="filter-select" id="filterStatut">
-                        <option value="">Tous statuts</option>
-                        <option value="en_attente">En attente</option>
-                        <option value="en_cours">En cours</option>
-                        <option value="resolue">Résolue</option>
-                        <option value="rejetee">Rejetée</option>
-                    </select>
-                </div>
-                <div class="filter-wrap">
-                    <i class="fas fa-fire filter-icon"></i>
-                    <select class="filter-select" id="filterPriorite">
-                        <option value="">Toutes priorités</option>
-                        <option value="faible">Faible</option>
-                        <option value="moyenne">Moyenne</option>
-                        <option value="elevee">Élevée</option>
-                    </select>
-                </div>
-                <div class="filter-wrap">
-                    <i class="fas fa-tag filter-icon"></i>
-                    <select class="filter-select" id="filterCategorie">
-                        <option value="">Toutes catégories</option>
-                        <option value="technique">Technique</option>
-                        <option value="paiement">Paiement</option>
-                        <option value="securite">Sécurité</option>
-                        <option value="autre">Autre</option>
-                    </select>
-                </div>
-                <?php endif; ?>
-            </div>
-
-            <div class="btn-add-wrap">
-                <button class="btn-add-circle" onclick="openAddModal()" title="Nouvelle réclamation">
-                    <i class="fas fa-plus"></i>
-                </button>
-                <button class="btn-add-label" onclick="openAddModal()">
-                    <i class="fas fa-plus-circle"></i> Nouvelle réclamation
-                </button>
-            </div>
-        </div>
-
-        <div class="table-container">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th><i class="fas fa-hashtag"></i> ID</th>
-                        <th><i class="fas fa-heading"></i> Titre</th>
-                        <th><i class="fas fa-user"></i> Utilisateur</th>
-                        <th><i class="fas fa-tag"></i> Catégorie</th>
-                        <th><i class="fas fa-calendar"></i> Date création</th>
-                        <th><i class="fas fa-fire"></i> Priorité</th>
-                        <th><i class="fas fa-brain"></i> Score</th>
-                        <th><i class="fas fa-chart-line"></i> Statut</th>
-                        <th><i class="fas fa-star"></i> Note</th>
-                        <th><i class="fas fa-cog"></i> Actions</th>
-                    </tr>
-                </thead>
-                <tbody id="tableBody">
-                    <?php if(empty($reclamations)): ?>
-                    <tr><td colspan="10"><div class="empty-state"><i class="fas fa-inbox"></i><p>Aucune réclamation trouvée</p></div></td></tr>
-                    <?php else: foreach($reclamations as $r): ?>
-                    <tr data-id="<?= $r['id'] ?>" data-statut="<?= $r['statut'] ?>" data-priorite="<?= $r['priorite'] ?>" data-categorie="<?= $r['categorie'] ?>">
-                        <td><code style="color:var(--bleu-clair)">#<?= $r['id'] ?></code></td>
-                        <td><strong><?= htmlspecialchars($r['titre']) ?></strong></td>
-                        <td>
-                            <div class="user-info">
-                                <span class="user-name"><?= htmlspecialchars($r['utilisateur_nom'] ?? 'ID:'.$r['utilisateur_id']) ?></span>
-                                <span class="user-email"><?= htmlspecialchars($r['utilisateur_email'] ?? '') ?></span>
-                            </div>
-                        </td>
-                        <td><span class="badge badge-<?= $r['categorie'] ?>"><?= $r['categorie'] ?></span></td>
-                        <td><?= date('d/m/Y', strtotime($r['date_creation'])) ?></td>
-                        <td><span class="badge badge-<?= $r['priorite'] ?>"><?= $r['priorite'] ?></span></td>
-                        <td>
-                            <?php 
-                            $score = $r['score_urgence'] ?? 0;
-                            $color = $score >= 80 ? '#e74c3c' : ($score >= 50 ? '#f1c40f' : '#2ecc71');
-                            ?>
-                            <div class="score-bar">
-                                <div class="score-bar-progress">
-                                    <div class="score-bar-fill" style="width: <?= $score ?>%; background: <?= $color ?>;"></div>
-                                </div>
-                                <span class="score-text" style="color: <?= $color ?>;"><?= $score ?></span>
-                            </div>
-                        </td>
-                        <td>
-                            <?php if($isAdmin): ?>
-                            <form method="POST" style="margin:0" class="statut-form">
-                                <input type="hidden" name="action" value="reclamation_statut">
-                                <input type="hidden" name="id" value="<?= $r['id'] ?>">
-                                <select name="statut" class="statut-select" onchange="this.form.submit()">
-                                    <option value="en_attente" <?= $r['statut']=='en_attente'?'selected':'' ?>>En attente</option>
-                                    <option value="en_cours" <?= $r['statut']=='en_cours'?'selected':'' ?>>En cours</option>
-                                    <option value="resolue" <?= $r['statut']=='resolue'?'selected':'' ?>>Résolue</option>
-                                    <option value="rejetee" <?= $r['statut']=='rejetee'?'selected':'' ?>>Rejetée</option>
-                                </select>
-                            </form>
-                            <?php else: ?>
-                            <span class="badge badge-<?= $r['statut'] ?>"><?= str_replace('_',' ',$r['statut']) ?></span>
-                            <?php endif; ?>
-                        </td>
-                        <td>
-                            <?php 
-                            $note = $r['note_satisfaction'] ?? null;
-                            if($note && is_numeric($note) && $note >= 1 && $note <= 5): 
-                                echo $note . '/5';
-                            else: 
-                                echo '—';
-                            endif; 
-                            ?>
-                        </td>
-                        <td class="action-buttons">
-                            <button class="btn-icon view" onclick="viewDetails(<?= $r['id'] ?>)" title="Voir détail"><i class="fas fa-eye"></i></button>
-                            <?php if($isAdmin): ?>
-                            <button class="btn-icon edit" onclick='openEditModal(<?= json_encode($r) ?> )' title="Modifier"><i class="fas fa-edit"></i></button>
-                            <form method="POST" style="margin:0;display:inline-block" onsubmit="return confirm('Supprimer cette réclamation ?')">
-                                <input type="hidden" name="action" value="reclamation_delete">
-                                <input type="hidden" name="id" value="<?= $r['id'] ?>">
-                                <button type="submit" class="btn-icon delete" title="Supprimer"><i class="fas fa-trash"></i></button>
-                            </form>
-                            <?php endif; ?>
-                        </td>
-                    </tr>
-                    <?php endforeach; endif; ?>
-                </tbody>
-            </table>
-        </div>
-
-        <footer>
-            <p><i class="fas fa-leaf"></i> EcoRide - Covoiturage intelligent et écologique | Moins de CO₂, plus de partage</p>
-        </footer>
-    </main>
-</div>
-
-<!-- MODAL AJOUT/MODIFIER -->
-<div id="reclamationModal" class="modal">
-    <div class="modal-content">
-        <h2 id="modalTitle"><i class="fas fa-plus-circle"></i> Nouvelle réclamation</h2>
-        <form method="POST" id="reclamationForm">
-            <input type="hidden" name="action" id="formAction" value="create_reclamation">
-            <input type="hidden" name="id" id="editId">
-            
-            <div class="form-group">
-                <label><i class="fas fa-heading"></i> Titre *</label>
-                <input type="text" name="titre" id="titre" required placeholder="Ex: Problème de connexion">
-            </div>
-            <div class="form-group">
-                <label><i class="fas fa-align-left"></i> Description *</label>
-                <textarea name="description" id="description" rows="3" required placeholder="Décrivez votre problème en détail..."></textarea>
-            </div>
-            
-            <?php if($isAdmin): ?>
-            <div class="form-group">
-                <label><i class="fas fa-id-badge"></i> ID Utilisateur</label>
-                <input type="number" name="utilisateur_id" id="utilisateur_id" value="1">
-            </div>
-            <?php endif; ?>
-            
-            <div class="form-group">
-                <label><i class="fas fa-tag"></i> Catégorie *</label>
-                <select name="categorie" id="categorie" required>
-                    <option value="technique">Technique</option>
-                    <option value="paiement">Paiement</option>
-                    <option value="securite">Sécurité</option>
-                    <option value="autre">Autre</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label><i class="fas fa-fire"></i> Priorité *</label>
-                <select name="priorite" id="priorite" required>
-                    <option value="faible">Faible</option>
-                    <option value="moyenne">Moyenne</option>
-                    <option value="elevee">Élevée</option>
-                </select>
-            </div>
-            
-            <?php if($isAdmin): ?>
-            <div class="form-group">
-                <label><i class="fas fa-chart-line"></i> Statut</label>
-                <select name="statut" id="statut">
-                    <option value="en_attente">En attente</option>
-                    <option value="en_cours">En cours</option>
-                    <option value="resolue">Résolue</option>
-                    <option value="rejetee">Rejetée</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label><i class="fas fa-star"></i> Note satisfaction (1-5)</label>
-                <input type="number" name="note_satisfaction" id="note_satisfaction" min="1" max="5" placeholder="1 à 5">
-            </div>
-            <div class="form-group">
-                <label><i class="fas fa-brain"></i> Score urgence (0-100)</label>
-                <input type="number" name="score_urgence" id="score_urgence" min="0" max="100" placeholder="0-100">
-            </div>
-            <div class="form-group">
-                <label><i class="fas fa-calendar-alt"></i> Date création</label>
-                <input type="date" name="date_creation" id="date_creation" value="<?= date('Y-m-d') ?>">
-            </div>
-            <div class="form-group">
-                <label><i class="fas fa-reply"></i> Réponse admin</label>
-                <textarea name="reponse_admin" id="reponse_admin" rows="2" placeholder="Votre réponse à l'utilisateur..."></textarea>
-            </div>
-            <?php else: ?>
-            <input type="hidden" name="statut" value="en_attente">
-            <input type="hidden" name="note_satisfaction" value="">
-            <input type="hidden" name="score_urgence" value="0">
-            <input type="hidden" name="date_creation" value="<?= date('Y-m-d') ?>">
-            <?php endif; ?>
-            
-            <div class="modal-buttons">
-                <button type="button" class="btn-cancel" onclick="closeModal()"><i class="fas fa-times"></i> Annuler</button>
-                <button type="submit" class="btn-save"><i class="fas fa-save"></i> Enregistrer</button>
-            </div>
-        </form>
+<?php if($isGestion): ?>
+        </main>
     </div>
-</div>
-
-<!-- MODAL DETAIL -->
-<div id="detailModal" class="modal">
-    <div class="modal-content">
-        <h2><i class="fas fa-eye"></i> Détail de la réclamation</h2>
-        <div id="detailContent"></div>
-        <div class="modal-buttons">
-            <button class="btn-cancel" onclick="closeDetailModal()"><i class="fas fa-times"></i> Fermer</button>
-        </div>
+<?php else: ?>
     </div>
-</div>
+<?php endif; ?>
+
+<!-- Modales -->
+<div id="reclamationModal" class="modal"><div class="modal-content"><h2 id="modalTitle">Nouvelle réclamation</h2><form id="reclamationFormModal" onsubmit="saveReclamation(event)"><input type="hidden" id="recId"><div class="form-group"><label>Titre</label><input type="text" id="titreModal" required></div><div class="form-group"><label>Description</label><textarea id="descriptionModal" rows="3" required></textarea></div><div class="form-group"><label>Catégorie</label><select id="categorieModal" required><option value="technique">Technique</option><option value="paiement">Paiement</option><option value="securite">Sécurité</option><option value="autre">Autre</option></select></div><div class="form-group"><label>Priorité</label><select id="prioriteModal" required><option value="faible">Faible</option><option value="moyenne">Moyenne</option><option value="elevee">Élevée</option></select></div><div class="form-group"><label>Statut</label><select id="statutModal"><option value="en_attente">En attente</option><option value="en_cours">En cours</option><option value="resolue">Résolue</option><option value="rejetee">Rejetée</option></select></div><div class="form-group"><label>Note (1-5)</label><input type="number" id="noteModal" min="1" max="5"></div><div class="form-group"><label>Score (0-100)</label><input type="number" id="scoreModal" min="0" max="100"></div><div class="form-group"><label>Réponse admin</label><textarea id="reponseModal" rows="2"></textarea></div><div class="modal-buttons"><button type="button" class="btn-cancel" onclick="closeModal()">Annuler</button><button type="submit" class="btn-save">Enregistrer</button></div></form></div></div>
+<div id="detailModal" class="modal"><div class="modal-content"><h2>Détail de la réclamation</h2><div id="detailContent"></div><div class="modal-buttons"><button class="btn-cancel" onclick="closeDetailModal()">Fermer</button></div></div></div>
+<div id="globalHistoryModal" class="modal"><div class="modal-content"><h2>Historique complet</h2><div id="globalHistoryContent"></div><div class="modal-buttons"><button class="btn-cancel" onclick="closeGlobalHistoryModal()">Fermer</button></div></div></div>
 
 <script>
-function showToast(message) {
-    let toast = document.createElement('div');
-    toast.className = 'toast';
-    toast.innerHTML = '<i class="fas fa-check-circle"></i> ' + message;
-    document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 3000);
+const reclamationsData = <?= json_encode($reclamations) ?>;
+let chartsInitialized = false;
+
+function toggleDropdown() { document.getElementById("dropdownMenu").classList.toggle("show"); }
+window.onclick = function(event) {
+    if (!event.target.matches('.dropdown-btn')) {
+        var dropdowns = document.getElementsByClassName("dropdown-content");
+        for (var i = 0; i < dropdowns.length; i++) {
+            if (dropdowns[i].classList.contains('show')) dropdowns[i].classList.remove('show');
+        }
+    }
+    if (event.target.classList?.contains('modal')) event.target.style.display = 'none';
 }
 
-function openAddModal() {
-    document.getElementById('modalTitle').innerHTML = '<i class="fas fa-plus-circle"></i> Nouvelle réclamation';
-    document.getElementById('formAction').value = 'create_reclamation';
-    document.getElementById('reclamationForm').reset();
-    document.getElementById('reclamationModal').style.display = 'flex';
+const themeToggle = document.getElementById('themeToggle');
+if (themeToggle) {
+    if (localStorage.getItem('theme') === 'light') {
+        document.body.classList.add('light-mode');
+        themeToggle.innerHTML = '<i class="fas fa-sun"></i>';
+    }
+    themeToggle.addEventListener('click', () => {
+        document.body.classList.toggle('light-mode');
+        const isLight = document.body.classList.contains('light-mode');
+        localStorage.setItem('theme', isLight ? 'light' : 'dark');
+        themeToggle.innerHTML = isLight ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
+    });
 }
 
-function openEditModal(r) {
-    document.getElementById('modalTitle').innerHTML = '<i class="fas fa-edit"></i> Modifier la réclamation';
-    document.getElementById('formAction').value = 'reclamation_update';
-    document.getElementById('editId').value = r.id;
-    document.getElementById('titre').value = r.titre;
-    document.getElementById('description').value = r.description;
-    document.getElementById('categorie').value = r.categorie;
-    document.getElementById('priorite').value = r.priorite;
-    if(document.getElementById('utilisateur_id')) document.getElementById('utilisateur_id').value = r.utilisateur_id;
-    if(document.getElementById('statut')) document.getElementById('statut').value = r.statut;
-    if(document.getElementById('reponse_admin')) document.getElementById('reponse_admin').value = r.reponse_admin || '';
-    if(document.getElementById('note_satisfaction')) document.getElementById('note_satisfaction').value = r.note_satisfaction || '';
-    if(document.getElementById('score_urgence')) document.getElementById('score_urgence').value = r.score_urgence || '';
-    if(document.getElementById('date_creation')) document.getElementById('date_creation').value = r.date_creation || '';
-    document.getElementById('reclamationModal').style.display = 'flex';
-}
-
+function openAddModal() { document.getElementById('modalTitle').innerHTML = 'Nouvelle réclamation'; document.getElementById('reclamationFormModal').reset(); document.getElementById('recId').value = ''; document.getElementById('reclamationModal').style.display = 'flex'; }
+function openEditModal(r) { document.getElementById('modalTitle').innerHTML = 'Modifier'; document.getElementById('recId').value = r.id; document.getElementById('titreModal').value = r.titre; document.getElementById('descriptionModal').value = r.description; document.getElementById('categorieModal').value = r.categorie; document.getElementById('prioriteModal').value = r.priorite; document.getElementById('statutModal').value = r.statut; document.getElementById('noteModal').value = r.note_satisfaction || ''; document.getElementById('scoreModal').value = r.score_urgence || 0; document.getElementById('reponseModal').value = r.reponse_admin || ''; document.getElementById('reclamationModal').style.display = 'flex'; }
+function saveReclamation(e) { e.preventDefault(); let id = document.getElementById('recId').value; let fd = new FormData(); fd.append('action', id ? 'reclamation_update' : 'create_reclamation'); if(id) fd.append('id', id); fd.append('titre', document.getElementById('titreModal').value); fd.append('description', document.getElementById('descriptionModal').value); fd.append('categorie', document.getElementById('categorieModal').value); fd.append('priorite', document.getElementById('prioriteModal').value); fd.append('statut', document.getElementById('statutModal').value); fd.append('note_satisfaction', document.getElementById('noteModal').value); fd.append('score_urgence', document.getElementById('scoreModal').value); fd.append('reponse_admin', document.getElementById('reponseModal').value); fetch('index.php', { method:'POST', body:fd }).then(() => location.reload()); }
+function viewDetails(r) { let statutText = { 'en_attente':'En attente','en_cours':'En cours','resolue':'Résolue','rejetee':'Rejetée' }; let prioriteText = { 'faible':'Faible','moyenne':'Moyenne','elevee':'Élevée' }; let categorieText = { 'technique':'Technique','paiement':'Paiement','securite':'Sécurité','autre':'Autre' }; let hist = r.historique_statut ? JSON.parse(r.historique_statut) : [r.statut]; let histHtml = ''; for(let i=0;i<hist.length;i++){ let col = '#61B3FA'; if(hist[i]=='en_attente') col='#f1c40f'; else if(hist[i]=='en_cours') col='#3498db'; else if(hist[i]=='resolue') col='#2ecc71'; else if(hist[i]=='rejetee') col='#e74c3c'; histHtml += `<div class="historique-item"><div class="historique-dot" style="background:${col}"></div><span>${statutText[hist[i]]}</span><span style="color:var(--gris);margin-left:auto">Étape ${i+1}</span></div>`; }
+    document.getElementById('detailContent').innerHTML = `<div class="detail-row"><div class="detail-label">ID :</div><div class="detail-value">#${r.id}</div></div><div class="detail-row"><div class="detail-label">Titre :</div><div class="detail-value"><strong>${r.titre}</strong></div></div><div class="detail-row"><div class="detail-label">Description :</div><div class="detail-value">${r.description}</div></div><div class="detail-row"><div class="detail-label">Utilisateur :</div><div class="detail-value">${r.utilisateur_nom || 'ID:'+r.utilisateur_id}</div></div><div class="detail-row"><div class="detail-label">Catégorie :</div><div class="detail-value">${categorieText[r.categorie]}</div></div><div class="detail-row"><div class="detail-label">Priorité :</div><div class="detail-value"><span class="badge badge-${r.priorite}">${prioriteText[r.priorite]}</span></div></div><div class="detail-row"><div class="detail-label">Statut :</div><div class="detail-value"><span class="badge badge-${r.statut}">${statutText[r.statut]}</span></div></div><div class="detail-row"><div class="detail-label">Date :</div><div class="detail-value">${new Date(r.date_creation).toLocaleDateString('fr-FR')}</div></div><div class="detail-row"><div class="detail-label">Score :</div><div class="detail-value">${r.score_urgence || 0}%</div></div><div class="detail-row"><div class="detail-label">Note :</div><div class="detail-value">${r.note_satisfaction ? '★'.repeat(r.note_satisfaction)+'☆'.repeat(5-r.note_satisfaction) : '—'}</div></div>${r.reponse_admin ? `<div class="detail-row"><div class="detail-label">Réponse :</div><div class="detail-value">${r.reponse_admin}</div></div>` : ''}<div class="detail-row"><div class="detail-label">Historique :</div><div class="detail-value">${histHtml}</div></div>`;
+    document.getElementById('detailModal').style.display = 'flex'; }
+function showHistory(r) { let statutText = { 'en_attente':'En attente','en_cours':'En cours','resolue':'Résolue','rejetee':'Rejetée' }; let hist = r.historique_statut ? JSON.parse(r.historique_statut) : [r.statut]; let html = `<div style="margin-bottom:0.8rem"><strong>📋 #${r.id} - ${r.titre}</strong></div>`; for(let i=0;i<hist.length;i++){ let col = '#61B3FA'; if(hist[i]=='en_attente') col='#f1c40f'; else if(hist[i]=='en_cours') col='#3498db'; else if(hist[i]=='resolue') col='#2ecc71'; else if(hist[i]=='rejetee') col='#e74c3c'; html += `<div class="historique-item"><div class="historique-dot" style="background:${col}"></div><span>${statutText[hist[i]]}</span><span style="color:var(--gris);margin-left:auto">Étape ${i+1}</span></div>`; } document.getElementById('globalHistoryContent').innerHTML = html; document.getElementById('globalHistoryModal').style.display = 'flex'; }
+function showGlobalHistory() { let statutText = { 'en_attente':'En attente','en_cours':'En cours','resolue':'Résolue','rejetee':'Rejetée' }; let html = ''; for(let r of reclamationsData){ let hist = r.historique_statut ? JSON.parse(r.historique_statut) : [r.statut]; html += `<div style="margin-bottom:1rem;padding:0.5rem;background:rgba(255,255,255,0.03);border-radius:10px;"><div style="font-weight:bold;color:var(--bleu-clair);margin-bottom:0.3rem">📋 #${r.id} - ${r.titre}</div>`; for(let i=0;i<hist.length;i++){ let col = '#61B3FA'; if(hist[i]=='en_attente') col='#f1c40f'; else if(hist[i]=='en_cours') col='#3498db'; else if(hist[i]=='resolue') col='#2ecc71'; else if(hist[i]=='rejetee') col='#e74c3c'; html += `<div class="historique-item"><div class="historique-dot" style="background:${col}"></div><span>${statutText[hist[i]]}</span><span style="color:var(--gris);margin-left:auto">Étape ${i+1}</span></div>`; } html += `</div>`; } document.getElementById('globalHistoryContent').innerHTML = html || '<div class="empty-state">Aucun historique</div>'; document.getElementById('globalHistoryModal').style.display = 'flex'; }
 function closeModal() { document.getElementById('reclamationModal').style.display = 'none'; }
 function closeDetailModal() { document.getElementById('detailModal').style.display = 'none'; }
+function closeGlobalHistoryModal() { document.getElementById('globalHistoryModal').style.display = 'none'; }
 
-function viewDetails(id) {
-    let rows = document.querySelectorAll('#tableBody tr');
-    let row = null;
-    for(let r of rows) {
-        if(r.cells && r.cells[0] && r.cells[0].innerText == '#'+id) {
-            row = r;
-            break;
-        }
-    }
-    if(row) {
-        document.getElementById('detailContent').innerHTML = `
-            <div class="form-group"><label>Titre</label><p><strong>${row.cells[1]?.innerText || ''}</strong></p></div>
-            <div class="form-group"><label>Utilisateur</label><p>${row.cells[2]?.innerText || ''}</p></div>
-            <div class="form-group"><label>Catégorie</label><p>${row.cells[3]?.innerText || ''}</p></div>
-            <div class="form-group"><label>Date création</label><p>${row.cells[4]?.innerText || ''}</p></div>
-            <div class="form-group"><label>Priorité</label><p>${row.cells[5]?.innerText || ''}</p></div>
-            <div class="form-group"><label>Score urgence</label><p>${row.cells[6]?.innerText || ''}</p></div>
-            <div class="form-group"><label>Statut</label><p>${row.cells[7]?.innerText || ''}</p></div>
-            <div class="form-group"><label>Note satisfaction</label><p>${row.cells[8]?.innerText || '—'}</p></div>
-        `;
-        document.getElementById('detailModal').style.display = 'flex';
-    }
-}
-
-document.getElementById('searchInput')?.addEventListener('keyup', function() {
-    let search = this.value.toLowerCase();
-    let rows = document.querySelectorAll('#tableBody tr');
-    rows.forEach(row => {
-        if(row.cells) {
-            let text = row.innerText.toLowerCase();
-            row.style.display = text.includes(search) ? '' : 'none';
+<?php if($isGestion): ?>
+const showDashboardBtn = document.getElementById('showDashboardBtn');
+const showTableBtn = document.getElementById('showTableBtn');
+const tableView = document.getElementById('tableView');
+const dashboardView = document.getElementById('dashboardView');
+if (showDashboardBtn && showTableBtn && tableView && dashboardView) {
+    showDashboardBtn.addEventListener('click', function() {
+        tableView.style.display = 'none';
+        dashboardView.style.display = 'block';
+        showDashboardBtn.style.display = 'none';
+        showTableBtn.style.display = 'inline-flex';
+        if (!chartsInitialized) {
+            const ctxStatut = document.getElementById('chartStatut')?.getContext('2d');
+            if(ctxStatut) new Chart(ctxStatut, { type: 'doughnut', data: { labels: <?= json_encode(array_column($statsStatut, 'statut')) ?>, datasets: [{ data: <?= json_encode(array_column($statsStatut, 'count')) ?>, backgroundColor: ['#f1c40f', '#3498db', '#2ecc71', '#e74c3c'], borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom', labels: { color: '#fff' } } } } });
+            const ctxCat = document.getElementById('chartCategorie')?.getContext('2d');
+            if(ctxCat) new Chart(ctxCat, { type: 'bar', data: { labels: <?= json_encode(array_column($statsCategorie, 'categorie')) ?>, datasets: [{ label: 'Nombre', data: <?= json_encode(array_column($statsCategorie, 'count')) ?>, backgroundColor: '#61B3FA', borderRadius: 6 }] }, options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } }, scales: { y: { ticks: { color: '#fff' }, grid: { color: 'rgba(255,255,255,0.1)' } }, x: { ticks: { color: '#fff' } } } } });
+            const ctxMois = document.getElementById('chartMois')?.getContext('2d');
+            if(ctxMois) new Chart(ctxMois, { type: 'line', data: { labels: <?= json_encode(array_column($statsMois, 'mois')) ?>, datasets: [{ label: 'Réclamations', data: <?= json_encode(array_column($statsMois, 'count')) ?>, borderColor: '#61B3FA', backgroundColor: 'rgba(97,179,250,0.1)', fill: true, tension: 0.3 }] }, options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { labels: { color: '#fff' } } }, scales: { y: { ticks: { color: '#fff' }, grid: { color: 'rgba(255,255,255,0.1)' } }, x: { ticks: { color: '#fff' } } } } });
+            chartsInitialized = true;
         }
     });
-});
-
-<?php if($isAdmin): ?>
-function filterTable() {
-    let statut = document.getElementById('filterStatut').value;
-    let priorite = document.getElementById('filterPriorite').value;
-    let categorie = document.getElementById('filterCategorie').value;
-    let rows = document.querySelectorAll('#tableBody tr');
-    
-    rows.forEach(row => {
-        if(row.cells) {
-            let rowStatut = row.getAttribute('data-statut') || '';
-            let rowPriorite = row.getAttribute('data-priorite') || '';
-            let rowCategorie = row.getAttribute('data-categorie') || '';
-            let show = true;
-            if(statut && rowStatut !== statut) show = false;
-            if(priorite && rowPriorite !== priorite) show = false;
-            if(categorie && rowCategorie !== categorie) show = false;
-            row.style.display = show ? '' : 'none';
-        }
+    showTableBtn.addEventListener('click', function() {
+        dashboardView.style.display = 'none';
+        tableView.style.display = 'block';
+        showTableBtn.style.display = 'none';
+        showDashboardBtn.style.display = 'inline-flex';
     });
 }
-
-document.getElementById('filterStatut')?.addEventListener('change', filterTable);
-document.getElementById('filterPriorite')?.addEventListener('change', filterTable);
-document.getElementById('filterCategorie')?.addEventListener('change', filterTable);
 <?php endif; ?>
 
-window.onclick = function(e) {
-    if(e.target.classList && e.target.classList.contains('modal')) {
-        e.target.style.display = 'none';
-    }
+const form = document.getElementById('reclamationForm');
+if(form) {
+    form.addEventListener('submit', function(e) {
+        let ok = true;
+        document.querySelectorAll('.error-msg').forEach(el => el.style.display = 'none');
+        if(document.getElementById('titre').value.trim().length < 3) { document.getElementById('errTitre').style.display = 'block'; ok = false; }
+        if(document.getElementById('description').value.trim().length < 10) { document.getElementById('errDescription').style.display = 'block'; ok = false; }
+        if(!document.getElementById('categorie').value) { document.getElementById('errCategorie').style.display = 'block'; ok = false; }
+        if(!document.getElementById('priorite').value) { document.getElementById('errPriorite').style.display = 'block'; ok = false; }
+        if(!ok) e.preventDefault();
+    });
 }
-
-<?php if($msg): ?>
-showToast('<?= addslashes($msg) ?>');
-<?php endif; ?>
 </script>
 </body>
 </html>
