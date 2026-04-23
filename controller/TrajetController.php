@@ -201,13 +201,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
 // =========================================================
 // DELETE — Supprimer un trajet et ses destinations
 // =========================================================
+// =========================================================
+// DELETE — Supprimer un trajet et ses destinations
+// =========================================================
 if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
-    $id = intval($_GET['id'] ?? 0);
-
-    if (!$id) {
+    $id = null;
+    
+    // Vérifier d'abord dans $_GET
+    if (isset($_GET['id']) && !empty($_GET['id'])) {
+        $id = intval($_GET['id']);
+    } else {
+        // Sinon dans le body
         $input = file_get_contents("php://input");
-        $body  = json_decode($input);
-        $id    = intval($body->id ?? 0);
+        if (!empty($input)) {
+            $body = json_decode($input);
+            if ($body && isset($body->id)) {
+                $id = intval($body->id);
+            }
+        }
     }
 
     if (!$id) {

@@ -130,12 +130,12 @@ function loadData() {
   fetch(T_API)
     .then(function (r) { return r.json(); })
     .then(function (d) { trips = d; updateStats(); renderTrips(); updateCharts(); })
-    .catch(function () { toast('Erreur chargement trajets', false); });
+    .catch(function () { console.warn('Erreur chargement trajets'); });
 
   fetch(D_API)
     .then(function (r) { return r.json(); })
     .then(function (d) { dests = d; updateStats(); renderDest(); updateCharts(); })
-    .catch(function () { toast('Erreur chargement destinations', false); });
+    .catch(function () { console.warn('Erreur chargement destinations'); });
 }
 
 /* =====================================================
@@ -274,7 +274,7 @@ function renderTrips() {
 
   if (slice.length === 0) {
     tbody.innerHTML =
-      '<tr><td colspan="7"><div class="empty"><i class="fas fa-inbox"></i><p>Aucun trajet trouvé</p></div></td></tr>';
+      '<tr><td colspan="7"><div class="empty"><i class="fas fa-inbox"></i><p>Aucun trajet trouvé</p></div></tr></tr>';
   } else {
     tbody.innerHTML = slice.map(function (t) {
       var dist  = parseFloat(t.distance_total || 0);

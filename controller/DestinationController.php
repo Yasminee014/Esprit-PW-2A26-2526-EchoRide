@@ -95,6 +95,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // =========================================================
 // DELETE - Supprimer une destination
 // =========================================================
+// =========================================================
+// DELETE - Supprimer une destination
+// =========================================================
 if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
     $id = null;
 
@@ -102,36 +105,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
         $id = intval($_GET['id']);
     } else {
         $input = file_get_contents("php://input");
-        $data  = json_decode($input);
-        if (!empty($data->id)) {
-            $id = intval($data->id);
+        if (!empty($input)) {
+            $data = json_decode($input);
+            if ($data && !empty($data->id)) {
+                $id = intval($data->id);
+            }
         }
     }
 
     if (!$id) {
         http_response_code(400);
-        echo json_encode(["error" => true, "message" => "ID manquant"]);
+        echo json_encode(["success" => false, "message" => "ID manquant"]);
         exit();
     }
 
-    // Supprimer par id_des
-    $query = "DELETE FROM destination WHERE id_des = :id";
-    try {
-        $stmt = $db->prepare($query);
-        $stmt->bindParam(":id", $id);
-        if ($stmt->execute()) {
-            http_response_code(200);
-            echo json_encode(["error" => false, "message" => "Destination supprimée"]);
-        } else {
-            http_response_code(500);
-            echo json_encode(["error" => true, "message" => "Erreur suppression"]);
-        }
-    } catch (Exception $e) {
+    if ($destination->delete($id)) {
+        http_response_code(200);
+        echo json_encode(["success" => true, "message" => "Destination supprimée"]);
+    } else {
         http_response_code(500);
-        echo json_encode(["error" => true, "message" => $e->getMessage()]);
+        echo json_encode(["success" => false, "message" => "Erreur lors de la suppression"]);
     }
     exit();
 }
-
 http_response_code(405);
 echo json_encode(["error" => true, "message" => "Méthode non autorisée"]);
