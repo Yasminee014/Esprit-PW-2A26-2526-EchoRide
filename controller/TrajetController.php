@@ -1,6 +1,6 @@
 <?php
 error_reporting(E_ALL);
-ini_set('display_errors', 0); // CRITICAL: never output PHP errors as HTML
+ini_set('display_errors', 0);
 
 require_once __DIR__ . "/../config/database.php";
 require_once __DIR__ . "/../model/Trajet.php";
@@ -29,34 +29,78 @@ $trajet      = new Trajet($db);
 $destination = new Destination($db);
 
 // =========================================================
-// GET — Lire tous les trajets
+// GET — Lire les trajets
+//   Sans paramètres   → tous les trajets (comportement original,
+//                        utilisé par le front user.js)
+//   Avec ?paginate=1  → réponse paginée pour l'admin
 // =========================================================
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     try {
-        $result = $trajet->read();
-        $data   = [];
-        while ($row = $result->fetch(PDO::FETCH_ASSOC)) {
-            // Count stops for this trip
-            $nbArrets = 0;
-            try {
-                $stmtArr = $db->prepare(
-                    "SELECT COUNT(*) FROM destination WHERE trajet_id = :id AND ordre != 999"
-                );
-                $stmtArr->bindParam(':id', $row['id_T']);
-                $stmtArr->execute();
-                $nbArrets = (int) $stmtArr->fetchColumn();
-            } catch (Exception $e) {}
+        // ── Mode paginé (admin) ──────────────────────────────
+        if (!empty($_GET['paginate'])) {
+            $page   = max(1, (int)($_GET['page']   ?? 1));
+            $limit  = max(1, (int)($_GET['limit']  ?? 10));
+            $search = trim($_GET['search'] ?? '');
+            $sort   = trim($_GET['sort']   ?? 'id_T');
+            $order  = trim($_GET['order']  ?? 'DESC');
 
-            $data[] = [
-                'id_T'           => $row['id_T'],
-                'point_depart'   => $row['point_depart']   ?? '',
-                'point_arrive'   => $row['point_arrive']   ?? '',
-                'prix_total'     => $row['prix_total']     ?? 0,
-                'distance_total' => $row['distance_total'] ?? 0,
-                'nb_arrets'      => $nbArrets,
-            ];
+            $total      = $trajet->countAll($search);
+            $totalPages = (int)ceil($total / $limit);
+            $rows       = $trajet->readWithPagination($search, $sort, $order, $page, $limit);
+
+            $data = [];
+            while ($row = $rows->fetch(PDO::FETCH_ASSOC)) {
+                $nbArrets = 0;
+                try {
+                    $s = $db->prepare("SELECT COUNT(*) FROM destination WHERE trajet_id = :id AND ordre != 999");
+                    $s->bindParam(':id', $row['id_T']);
+                    $s->execute();
+                    $nbArrets = (int)$s->fetchColumn();
+                } catch (Exception $e) {}
+
+                $data[] = [
+                    'id_T'           => $row['id_T'],
+                    'point_depart'   => $row['point_depart']   ?? '',
+                    'point_arrive'   => $row['point_arrive']   ?? '',
+                    'prix_total'     => $row['prix_total']     ?? 0,
+                    'distance_total' => $row['distance_total'] ?? 0,
+                    'nb_arrets'      => $nbArrets,
+                ];
+            }
+
+            echo json_encode([
+                'data'        => $data,
+                'total'       => $total,
+                'page'        => $page,
+                'limit'       => $limit,
+                'total_pages' => $totalPages,
+            ]);
+
+        // ── Mode classique (front user.js) ──────────────────
+        } else {
+            $result = $trajet->read();
+            $data   = [];
+            while ($row = $result->fetch(PDO::FETCH_ASSOC)) {
+                $nbArrets = 0;
+                try {
+                    $s = $db->prepare("SELECT COUNT(*) FROM destination WHERE trajet_id = :id AND ordre != 999");
+                    $s->bindParam(':id', $row['id_T']);
+                    $s->execute();
+                    $nbArrets = (int)$s->fetchColumn();
+                } catch (Exception $e) {}
+
+                $data[] = [
+                    'id_T'           => $row['id_T'],
+                    'point_depart'   => $row['point_depart']   ?? '',
+                    'point_arrive'   => $row['point_arrive']   ?? '',
+                    'prix_total'     => $row['prix_total']     ?? 0,
+                    'distance_total' => $row['distance_total'] ?? 0,
+                    'nb_arrets'      => $nbArrets,
+                ];
+            }
+            echo json_encode($data);
         }
-        echo json_encode($data);
+
     } catch (Exception $e) {
         http_response_code(500);
         echo json_encode(["success" => false, "message" => $e->getMessage()]);
@@ -65,7 +109,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 }
 
 // =========================================================
-// POST — Créer un trajet + ses arrêts
+// POST — Créer un trajet + ses arrêts (inchangé)
 // =========================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $input = file_get_contents("php://input");
@@ -90,7 +134,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     try {
-        // Insert trajet
         $stmt = $db->prepare(
             "INSERT INTO trajet (point_depart, point_arrive, prix_total, distance_total)
              VALUES (:depart, :arrivee, :prix, :distance)"
@@ -102,24 +145,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt->execute();
         $newId = $db->lastInsertId();
 
-        // Insert arrêts
-        // Dans la boucle foreach des arrêts (POST) :
-foreach ($arrets as $arret) {
-    $nom       = trim($arret->nom      ?? '');
-    $ord       = intval($arret->ordre  ?? 1);
-    $dist      = floatval($arret->distance ?? 0);
-    $prixArret = floatval($arret->prix ?? 0); // ← était absent en POST !
-    if ($nom !== '') {
-        $destination->addArret($newId, $nom, $ord, $dist, $prixArret);
-    }
-}
+        foreach ($arrets as $arret) {
+            $nom       = trim($arret->nom      ?? '');
+            $ord       = intval($arret->ordre  ?? 1);
+            $dist      = floatval($arret->distance ?? 0);
+            $prixArret = floatval($arret->prix ?? 0);
+            if ($nom !== '') {
+                $destination->addArret($newId, $nom, $ord, $dist, $prixArret);
+            }
+        }
 
         http_response_code(200);
-        echo json_encode([
-            "success" => true,
-            "message" => "Trajet publié avec succès",
-            "id"      => $newId
-        ]);
+        echo json_encode(["success" => true, "message" => "Trajet publié avec succès", "id" => $newId]);
     } catch (Exception $e) {
         http_response_code(500);
         echo json_encode(["success" => false, "message" => $e->getMessage()]);
@@ -128,7 +165,7 @@ foreach ($arrets as $arret) {
 }
 
 // =========================================================
-// PUT — Modifier un trajet existant
+// PUT — Modifier un trajet existant (inchangé)
 // =========================================================
 if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
     $input = file_get_contents("php://input");
@@ -156,10 +193,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
     try {
         $stmt = $db->prepare(
             "UPDATE trajet
-             SET point_depart    = :depart,
-                 point_arrive    = :arrivee,
-                 prix_total      = :prix,
-                 distance_total  = :distance
+             SET point_depart   = :depart,
+                 point_arrive   = :arrivee,
+                 prix_total     = :prix,
+                 distance_total = :distance
              WHERE id_T = :id"
         );
         $stmt->bindParam(':depart',   $depart);
@@ -169,28 +206,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
         $stmt->bindParam(':id',       $id);
         $stmt->execute();
 
-        // Supprimer les anciens arrêts intermédiaires (garder ordre=999 = réservations)
-        $stmtDel = $db->prepare(
-            "DELETE FROM destination WHERE trajet_id = :id AND ordre != 999"
-        );
+        $stmtDel = $db->prepare("DELETE FROM destination WHERE trajet_id = :id AND ordre != 999");
         $stmtDel->bindParam(':id', $id);
         $stmtDel->execute();
 
-        // Réinsérer les nouveaux arrêts
         foreach ($arrets as $arret) {
             $nom       = trim($arret->nom      ?? '');
             $ord       = intval($arret->ordre  ?? 1);
             $dist      = floatval($arret->distance ?? 0);
             $prixArret = floatval($arret->prix ?? 0);
             if ($nom !== '') {
-                // ✅ On utilise $id (l'id du trajet existant), plus $newId qui n'existe pas ici
                 $destination->addArret($id, $nom, $ord, $dist, $prixArret);
             }
         }
 
         http_response_code(200);
         echo json_encode(["success" => true, "message" => "Trajet et arrêts mis à jour"]);
-
     } catch (Exception $e) {
         http_response_code(500);
         echo json_encode(["success" => false, "message" => $e->getMessage()]);
@@ -199,19 +230,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
 }
 
 // =========================================================
-// DELETE — Supprimer un trajet et ses destinations
-// =========================================================
-// =========================================================
-// DELETE — Supprimer un trajet et ses destinations
+// DELETE — Supprimer un trajet (inchangé)
 // =========================================================
 if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
     $id = null;
-    
-    // Vérifier d'abord dans $_GET
+
     if (isset($_GET['id']) && !empty($_GET['id'])) {
         $id = intval($_GET['id']);
     } else {
-        // Sinon dans le body
         $input = file_get_contents("php://input");
         if (!empty($input)) {
             $body = json_decode($input);
@@ -228,14 +254,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
     }
 
     try {
-        // Delete linked destinations first
         $destination->deleteByTrajet($id);
-
-        // Delete trajet
         $stmt = $db->prepare("DELETE FROM trajet WHERE id_T = :id");
         $stmt->bindParam(':id', $id);
         $stmt->execute();
-
         http_response_code(200);
         echo json_encode(["success" => true, "message" => "Trajet supprimé"]);
     } catch (Exception $e) {

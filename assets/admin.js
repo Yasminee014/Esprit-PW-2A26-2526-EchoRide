@@ -127,14 +127,14 @@ document.querySelectorAll('.nav-item[data-page]').forEach(function (el) {
    CHARGEMENT
    ===================================================== */
 function loadData() {
-  fetch(T_API)
+  fetch(T_API + "?paginate=1&page=1&limit=1000&sort=id_T&order=DESC")
     .then(function (r) { return r.json(); })
-    .then(function (d) { trips = d; updateStats(); renderTrips(); updateCharts(); })
+    .then(function (d) { trips = d.data || []; updateStats(); renderTrips(); updateCharts(); })
     .catch(function () { console.warn('Erreur chargement trajets'); });
 
-  fetch(D_API)
+  fetch(D_API + "?paginate=1&page=1&limit=1000&sort=id_des&order=DESC")
     .then(function (r) { return r.json(); })
-    .then(function (d) { dests = d; updateStats(); renderDest(); updateCharts(); })
+    .then(function (d) { dests = d.data || []; updateStats(); renderDest(); updateCharts(); })
     .catch(function () { console.warn('Erreur chargement destinations'); });
 }
 

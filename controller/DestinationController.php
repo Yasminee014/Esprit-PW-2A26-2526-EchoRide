@@ -16,41 +16,78 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit();
 }
 
-$database = new Database();
-$db       = $database->getConnection();
+$database    = new Database();
+$db          = $database->getConnection();
 $destination = new Destination($db);
 
 // =========================================================
-// GET - Lire toutes les destinations
+// GET — Lire les destinations
+//   Sans paramètres   → toutes les destinations (front user.js)
+//   Avec ?paginate=1  → réponse paginée (admin)
 // =========================================================
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-    $result = $destination->read();
-    $data   = [];
 
-    while ($row = $result->fetch(PDO::FETCH_ASSOC)) {
-        // Normaliser les champs pour le frontend admin :
-        // id_des, trajet_id, nom (destination), distance, ordre
-        // + point_arrive provient du trajet parent
-        $data[] = [
-            'id_des'          => $row['id_des']   ?? $row['id'] ?? null,
-            'trajet_id'       => $row['trajet_id'] ?? null,
-            'id_trajet'       => $row['trajet_id'] ?? null,  // alias
-            'nom'             => $row['nom']       ?? $row['descente'] ?? '',
-            'nom_destination' => $row['nom']       ?? $row['descente'] ?? '', // alias admin
-            'descente'        => $row['nom']       ?? $row['descente'] ?? '', // alias front
-            'distance'        => $row['distance']  ?? 0,
-            'ordre'           => $row['ordre']     ?? 0,
-            'point_arrive'    => $row['point_arrive'] ?? '',  // si JOIN existe
-            'prix'            => $row['prix']      ?? 0,
-        ];
+    // ── Mode paginé (admin) ──────────────────────────────
+    if (!empty($_GET['paginate'])) {
+        $page   = max(1, (int)($_GET['page']   ?? 1));
+        $limit  = max(1, (int)($_GET['limit']  ?? 10));
+        $search = trim($_GET['search'] ?? '');
+        $sort   = trim($_GET['sort']   ?? 'id_des');
+        $order  = trim($_GET['order']  ?? 'DESC');
+
+        $total      = $destination->countAll($search);
+        $totalPages = (int)ceil($total / $limit);
+        $rows       = $destination->readWithPagination($search, $sort, $order, $page, $limit);
+
+        $data = [];
+        while ($row = $rows->fetch(PDO::FETCH_ASSOC)) {
+            $data[] = [
+                'id_des'          => $row['id_des']      ?? null,
+                'trajet_id'       => $row['trajet_id']   ?? null,
+                'id_trajet'       => $row['trajet_id']   ?? null,
+                'nom'             => $row['nom']         ?? $row['descente'] ?? '',
+                'nom_destination' => $row['nom']         ?? $row['descente'] ?? '',
+                'descente'        => $row['nom']         ?? $row['descente'] ?? '',
+                'distance'        => $row['distance']    ?? 0,
+                'ordre'           => $row['ordre']       ?? 0,
+                'point_arrive'    => $row['point_arrive'] ?? '',
+                'prix'            => $row['prix']        ?? 0,
+            ];
+        }
+
+        echo json_encode([
+            'data'        => $data,
+            'total'       => $total,
+            'page'        => $page,
+            'limit'       => $limit,
+            'total_pages' => $totalPages,
+        ]);
+
+    // ── Mode classique (front user.js) ──────────────────
+    } else {
+        $result = $destination->read();
+        $data   = [];
+        while ($row = $result->fetch(PDO::FETCH_ASSOC)) {
+            $data[] = [
+                'id_des'          => $row['id_des']      ?? $row['id'] ?? null,
+                'trajet_id'       => $row['trajet_id']   ?? null,
+                'id_trajet'       => $row['trajet_id']   ?? null,
+                'nom'             => $row['nom']         ?? $row['descente'] ?? '',
+                'nom_destination' => $row['nom']         ?? $row['descente'] ?? '',
+                'descente'        => $row['nom']         ?? $row['descente'] ?? '',
+                'distance'        => $row['distance']    ?? 0,
+                'ordre'           => $row['ordre']       ?? 0,
+                'point_arrive'    => $row['point_arrive'] ?? '',
+                'prix'            => $row['prix']        ?? 0,
+            ];
+        }
+        echo json_encode($data);
     }
-
-    echo json_encode($data);
     exit();
 }
 
 // =========================================================
-// POST - Créer une réservation (point de descente)
+// POST — Créer une réservation (inchangé)
 // =========================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $input = file_get_contents("php://input");
@@ -65,7 +102,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $trajet_id = intval($data->trajet_id ?? 0);
     $descente  = trim($data->descente   ?? '');
     $distance  = isset($data->distance) ? floatval($data->distance) : null;
-    $prix     = floatval($data->prix ?? 0);
+    $prix      = floatval($data->prix   ?? 0);
 
     if (!$trajet_id || empty($descente)) {
         http_response_code(400);
@@ -76,7 +113,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit();
     }
 
-    if ($destination->create($trajet_id, $descente, $distance , $prix)) {
+    if ($destination->create($trajet_id, $descente, $distance, $prix)) {
         http_response_code(200);
         echo json_encode([
             "success" => true,
@@ -84,19 +121,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ]);
     } else {
         http_response_code(500);
-        echo json_encode([
-            "success" => false,
-            "message" => "Erreur SQL lors de l'enregistrement"
-        ]);
+        echo json_encode(["success" => false, "message" => "Erreur SQL lors de l'enregistrement"]);
     }
     exit();
 }
 
 // =========================================================
-// DELETE - Supprimer une destination
-// =========================================================
-// =========================================================
-// DELETE - Supprimer une destination
+// DELETE — Supprimer une destination (inchangé)
 // =========================================================
 if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
     $id = null;
@@ -128,5 +159,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
     }
     exit();
 }
+
 http_response_code(405);
 echo json_encode(["error" => true, "message" => "Méthode non autorisée"]);

@@ -259,6 +259,11 @@ let sortKey = '';
 let sortDir = 1;
 let selectedStop = null;
 
+// Pagination state (use window namespace for global sync)
+window.currentPage = 1;
+window.totalPages = 1;
+window.pageSize = 8;
+
 // ====================================================
 // FONCTIONS UTILES
 // ====================================================
@@ -314,6 +319,11 @@ function validateVille(ville, nomChamp) {
   const villeLower = ville.trim().toLowerCase();
   if (!CITIES[villeLower]) {
     toast('La ville "' + ville + '" n\'est pas reconnue dans notre base. Veuillez choisir une ville valide.', false);
+    return false;
+  }
+  return true;
+  if (!getCoordsFromCache(ville)) {
+    toast('Ville "' + ville + '" non géolocalisée. Sélectionnez une suggestion.', false);
     return false;
   }
   return true;
@@ -402,6 +412,11 @@ function ajouterArret() {
     <input type="hidden" id="av_${id}" value="">
   `;
   document.getElementById('arrets-list').appendChild(div);
+  const nomEl = document.getElementById('an_' + id);
+if (nomEl) {
+  nomEl.removeAttribute('list');
+  initAutocomplete(nomEl, () => updateArretSingle(id));
+}
 }
 
 function rmArret(id) {
@@ -639,7 +654,15 @@ function applySort() {
   };
   
   if (sortFunctions[val]) data.sort(sortFunctions[val]);
-  renderTrajets(data);
+  
+  // Recalculate total pages after filtering
+  window.totalPages = Math.ceil(data.length / window.pageSize);
+  window.currentPage = Math.min(window.currentPage, window.totalPages) || 1;
+  
+  const start = (window.currentPage - 1) * window.pageSize;
+  const end = start + pageSize;
+  renderTrajets(data.slice(start, end));
+  renderPagination('pagination-container-mes-trajets');
 }
 
 function sortBy(key) {
@@ -700,11 +723,70 @@ function renderTrajets(data) {
         <td><div class="abtns">
           <button class="abtn abtn-edit" title="Modifier" onclick="window.app.modifierTrajet(${t.id_T},'${escJ(t.point_depart)}','${escJ(t.point_arrive)}',${parseFloat(t.prix_total || t.prix || 0)})"><i class="fas fa-edit"></i></button>
           <button class="abtn abtn-del" title="Supprimer" onclick="window.app.supprimerTrajet(${t.id_T})"><i class="fas fa-trash"></i></button>
-          <button class="abtn abtn-res" title="Réserver" onclick="window.app.reserverTrajet(${t.id_T})"><i class="fas fa-ticket-alt"></i></button>
+
         </div></td>
       </tr>
     `;
   }).join('');
+}
+
+// ====================================================
+// PAGINATION
+// ====================================================
+
+function renderPagination(containerId = 'pagination-container') {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  
+  if (window.totalPages <= 1) {
+    container.innerHTML = '';
+    return;
+  }
+  
+  let html = '<div class="pagination">';
+  
+  // Previous button
+  if (window.currentPage > 1) {
+    html += `<a href="#" onclick="changePage(${window.currentPage - 1}, '${containerId}')"><i class="fas fa-chevron-left"></i></a>`;
+  }
+  
+  // Page numbers
+  const start = Math.max(1, window.currentPage - 2);
+  const end = Math.min(window.totalPages, window.currentPage + 2);
+  
+  if (start > 1) {
+    html += `<a href="#" onclick="changePage(1, '${containerId}')">1</a>`;
+    if (start > 2) html += '<span>...</span>';
+  }
+  
+  for (let i = start; i <= end; i++) {
+    html += `<a href="#" onclick="changePage(${i}, '${containerId}')" class="${i === window.currentPage ? 'active' : ''}">${i}</a>`;
+  }
+  
+  if (end < window.totalPages) {
+    if (end < window.totalPages - 1) html += '<span>...</span>';
+    html += `<a href="#" onclick="changePage(${window.totalPages}, '${containerId}')">${window.totalPages}</a>`;
+  }
+  
+  // Next button
+  if (window.currentPage < window.totalPages) {
+    html += `<a href="#" onclick="changePage(${window.currentPage + 1}, '${containerId}')"><i class="fas fa-chevron-right"></i></a>`;
+  }
+  
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function changePage(page, containerId = 'pagination-container') {
+  window.currentPage = page;
+  
+  if (containerId === 'pagination-container-mes-trajets') {
+    applySort();
+  } else if (containerId === 'pagination-container') {
+    if (typeof loadAllTrips === 'function') loadAllTrips();
+  } else if (containerId === 'pagination-container-historique') {
+    if (typeof loadHistorique === 'function') loadHistorique();
+  }
 }
 
 // ====================================================
@@ -849,26 +931,139 @@ function switchMode(m) {
 }
 
 function chargerTrajets() {
-  fetch(API_URL)
+  fetch(API_URL + "?paginate=1&page=1&limit=10000&sort=id_T&order=DESC")  // Load all trips
     .then(r => r.json())
-    .then(data => { allTrips = data; applySort(); })
+    .then(data => { 
+      allTrips = data.data || []; 
+      window.totalPages = Math.ceil(allTrips.length / window.pageSize);
+      window.currentPage = 1;
+      applySort(); 
+    })
     .catch(e => toast('Erreur chargement : ' + e.message, false));
   
-  fetch(DEST_API)
+  fetch(DEST_API + "?paginate=1&page=1&limit=1000&sort=id_des&order=DESC")
     .then(r => r.json())
-    .then(data => { allDests = data; })
+    .then(data => { allDests = data.data || []; })
     .catch(() => {});
 }
 
-// Remplir datalist
-(function() {
-  const dl = document.getElementById('cityList');
-  Object.keys(CITIES).forEach(c => {
-    const o = document.createElement('option');
-    o.value = c.charAt(0).toUpperCase() + c.slice(1);
-    dl.appendChild(o);
+// ====================================================
+// CACHE DE COORDONNÉES (remplace CITIES pour le calcul)
+// ====================================================
+const coordsCache = {};
+
+// Garder CITIES comme fallback (villes principales)
+function getCoordsFromCache(ville) {
+  const key = (ville || '').toLowerCase().trim();
+  if (coordsCache[key]) return coordsCache[key];         // 1. cache dynamique
+  if (CITIES[key])      return CITIES[key];               // 2. fallback statique
+  return null;
+}
+
+// Calcul distance — maintenant utilise le cache
+function calcDistance(c1, c2) {
+  const a = getCoordsFromCache(c1);
+  const b = getCoordsFromCache(c2);
+  if (!a || !b) return null;
+  const R = 6371;
+  const dLat = (b[0] - a[0]) * Math.PI / 180;
+  const dLon = (b[1] - a[1]) * Math.PI / 180;
+  const x = Math.sin(dLat/2)**2 +
+            Math.cos(a[0]*Math.PI/180) * Math.cos(b[0]*Math.PI/180) * Math.sin(dLon/2)**2;
+  return Math.round(R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1-x)));
+}
+
+// ====================================================
+// AUTOCOMPLÉTION TMAPS.TN
+// ====================================================
+const TMAPS_BASE = 'https://api.tmaps.tn/geocoding';
+
+function initAutocomplete(inputEl, onSelect) {
+  // Créer la liste de suggestions sous le champ
+  const wrap = inputEl.parentElement;
+  wrap.style.position = 'relative';
+
+  const list = document.createElement('ul');
+  list.style.cssText = `
+    position:absolute; top:100%; left:0; right:0; z-index:500;
+    background:#0D1F3A; border:1px solid rgba(97,179,250,.3);
+    border-radius:10px; margin:4px 0 0; padding:4px 0;
+    list-style:none; max-height:220px; overflow-y:auto;
+    box-shadow:0 8px 24px rgba(0,0,0,.5); display:none;
+  `;
+  wrap.appendChild(list);
+
+  let debounceTimer;
+
+  inputEl.addEventListener('input', function() {
+    clearTimeout(debounceTimer);
+    const query = this.value.trim();
+    if (query.length < 3) { list.style.display = 'none'; return; }
+
+    debounceTimer = setTimeout(() => {
+      fetch(`${TMAPS_BASE}?address=${encodeURIComponent(query + ' Tunisie')}`)
+        .then(r => r.json())
+        .then(data => {
+          const results = data.results || [];
+          list.innerHTML = '';
+
+          if (!results.length) { list.style.display = 'none'; return; }
+
+          results.slice(0, 8).forEach(place => {
+            const li = document.createElement('li');
+            li.textContent = place.display_name;
+            li.style.cssText = `
+              padding:.55rem 1rem; cursor:pointer; font-size:.83rem;
+              color:rgba(255,255,255,.85); transition:background .15s;
+              border-bottom:1px solid rgba(97,179,250,.08);
+            `;
+            li.addEventListener('mouseenter', () => li.style.background = 'rgba(97,179,250,.12)');
+            li.addEventListener('mouseleave', () => li.style.background = '');
+            li.addEventListener('click', () => {
+              // Stocker coords dans le cache
+              const key = place.display_name.toLowerCase().trim();
+              coordsCache[key] = [parseFloat(place.lat), parseFloat(place.lon)];
+
+              inputEl.value = place.display_name;
+              list.style.display = 'none';
+
+              if (onSelect) onSelect(place);
+            });
+            list.appendChild(li);
+          });
+
+          list.style.display = 'block';
+        })
+        .catch(() => {
+          // Si l'API échoue → garder CITIES comme fallback silencieux
+          list.style.display = 'none';
+        });
+    }, 300); // debounce 300ms
   });
-})();
+
+  // Fermer si clic dehors
+  document.addEventListener('click', e => {
+    if (!wrap.contains(e.target)) list.style.display = 'none';
+  });
+}
+
+// Remplace l'ancien remplissage de <datalist>
+window.addEventListener('DOMContentLoaded', () => {
+  const depEl = document.getElementById('depart');
+  const arrEl = document.getElementById('arrivee');
+
+  // Supprimer l'attribut list (on n'utilise plus <datalist>)
+  if (depEl) { depEl.removeAttribute('list'); initAutocomplete(depEl, () => onRouteChange()); }
+  if (arrEl) { arrEl.removeAttribute('list'); initAutocomplete(arrEl, () => onRouteChange()); }
+
+  // Champs de recherche (tab "Rechercher")
+  const sdEl = document.getElementById('searchDepart');
+  const saEl = document.getElementById('searchArrivee');
+  if (sdEl) { sdEl.removeAttribute('list'); initAutocomplete(sdEl, null); }
+  if (saEl) { saEl.removeAttribute('list'); initAutocomplete(saEl, null); }
+
+  chargerTrajets();
+});
 
 // Initialisation
 window.onload = () => {
@@ -889,23 +1084,6 @@ function supprimerTrajet(id) {
     .catch(e => toast('Erreur : ' + e.message, false));
 }
 
-// Exposer les fonctions nécessaires globalement
-window.app = {
-  switchMode,
-  onRouteChange,
-  ajouterArret,
-  rmArret,
-  updateArretSingle,
-  updateAllArretPrix,
-  ajouterTrajet,
-  modifierTrajet,
-  supprimerTrajet, 
-  rechercherTrajet,
-  filterTable,
-  applySort,
-  sortBy,
-  reserverTrajet,
-  selectStop,
-  confirmerReservation,
-  annulerReservation
-};
+// Expose functions
+window.renderPagination = renderPagination;
+window.changePage = changePage;
