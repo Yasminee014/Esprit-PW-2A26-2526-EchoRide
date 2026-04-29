@@ -1,6 +1,6 @@
 <?php
 if (session_status() === PHP_SESSION_NONE) session_start();
-require_once __DIR__ . '/../../Controller/ReservationController.php';
+require_once __DIR__ . '/../../Config/Database.php';
 
 $vehicule = $vehicule ?? null;
 if (!$vehicule) {
@@ -8,204 +8,151 @@ if (!$vehicule) {
     exit;
 }
 
-$couleurMap = [
-    'rouge'=>'#e74c3c', 'red'=>'#e74c3c', 'bleu'=>'#1976D2', 'blue'=>'#1976D2',
-    'vert'=>'#27ae60', 'green'=>'#27ae60', 'noir'=>'#2c3e50', 'black'=>'#2c3e50',
-    'blanc'=>'#ecf0f1', 'white'=>'#ecf0f1', 'gris'=>'#7f8c8d', 'jaune'=>'#f1c40f'
-];
-$couleurNom = strtolower(trim($vehicule['couleur'] ?? 'gris'));
-$couleurHex = $couleurMap[$couleurNom] ?? '#7f8c8d';
+$db = Database::getInstance();
+$trajets = $db->query("
+    SELECT t.*, u.nom as conducteur_nom, u.prenom as conducteur_prenom
+    FROM trajet t
+    LEFT JOIN users u ON t.id_u = u.id
+    ORDER BY t.id_T DESC
+")->fetchAll();
+
+$capaciteMax = $vehicule['capacite'] ?? 4;
 ?>
 <!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Réserver un véhicule | EcoRide</title>
+    <title>Réservation sécurisée | EcoRide</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #0A1628;
+            background: linear-gradient(135deg, #0A1628, #0D1F3A);
             color: #fff;
-            transition: background 0.3s, color 0.3s;
+            min-height: 100vh;
         }
-        body.light-mode {
-            background: #f5f5f5;
-            color: #333;
+        
+        .reservation-container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 2rem;
         }
-        body.light-mode .navbar {
-            background: #fff;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        body.light-mode .navbar .logo,
-        body.light-mode .navbar .dropdown-btn,
-        body.light-mode .navbar .user-info {
-            color: #1976D2;
-        }
-        body.light-mode .dropdown-content {
-            background: #fff;
-            border: 1px solid #e0e0e0;
-        }
-        body.light-mode .dropdown-content a {
-            color: #333;
-        }
-        body.light-mode .vehicule-card,
-        body.light-mode .form-card {
-            background: #fff;
-            border-color: #e0e0e0;
-        }
-        body.light-mode .hero-small {
-            background: linear-gradient(135deg, #1565C0, #0D47A1);
-        }
-
-        .navbar {
-            background: linear-gradient(90deg, #1976D2, #0F3B6E);
-            padding: 0.8rem 2rem;
+        
+        .progress-steps {
             display: flex;
             justify-content: space-between;
-            align-items: center;
-            position: sticky;
-            top: 0;
-            z-index: 100;
+            margin-bottom: 3rem;
+            position: relative;
         }
-        .nav-left { display: flex; align-items: center; gap: 2rem; }
-        .logo { display: flex; align-items: center; gap: 8px; font-size: 1.3rem; font-weight: 700; color: #fff; text-decoration: none; }
-        .logo i { color: #61B3FA; }
-        .dropdown { position: relative; display: inline-block; }
-        .dropdown-btn {
-            background: rgba(255,255,255,0.1);
-            color: #fff;
-            padding: 0.6rem 1.2rem;
-            border: 1px solid rgba(97,179,250,.4);
-            border-radius: 30px;
-            font-size: 0.9rem;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .dropdown-content {
-            display: none;
+        
+        .progress-steps::before {
+            content: '';
             position: absolute;
-            top: 110%;
+            top: 30px;
             left: 0;
-            min-width: 220px;
-            background: linear-gradient(145deg, #0D1F3A, #122A4A);
-            border: 1px solid rgba(97,179,250,.3);
-            border-radius: 12px;
-            box-shadow: 0 8px 30px rgba(0,0,0,.4);
-            z-index: 200;
-            overflow: hidden;
+            right: 0;
+            height: 2px;
+            background: rgba(97,179,250,0.2);
+            z-index: 1;
         }
-        .dropdown-content.show { display: block; animation: fadeInDown 0.25s ease; }
-        @keyframes fadeInDown {
-            from { opacity: 0; transform: translateY(-10px); }
-            to { opacity: 1; transform: translateY(0); }
+        
+        .step {
+            text-align: center;
+            z-index: 2;
+            background: #0A1628;
+            padding: 0 1rem;
         }
-        .dropdown-content a {
+        
+        .step .step-number {
+            width: 60px;
+            height: 60px;
+            background: rgba(97,179,250,0.1);
+            border: 2px solid rgba(97,179,250,0.3);
+            border-radius: 50%;
             display: flex;
             align-items: center;
-            gap: 12px;
-            padding: 0.8rem 1.2rem;
-            color: #fff;
-            text-decoration: none;
-            font-size: 0.85rem;
-            transition: all 0.2s;
+            justify-content: center;
+            margin: 0 auto 0.5rem;
+            font-weight: bold;
+            font-size: 1.2rem;
         }
-        .dropdown-content a i { width: 20px; color: #61B3FA; }
-        .dropdown-content a:hover { background: rgba(97,179,250,.15); padding-left: 1.5rem; }
-        .dropdown-divider { height: 1px; background: rgba(97,179,250,.2); margin: 0.3rem 0; }
-        .nav-right { display: flex; align-items: center; gap: 1rem; }
-        .user-info {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            background: rgba(255,255,255,0.1);
-            padding: 0.4rem 1rem;
-            border-radius: 30px;
-            font-size: 0.85rem;
+        
+        .step.active .step-number {
+            background: #1976D2;
+            border-color: #61B3FA;
+            color: white;
         }
-        .theme-btn {
-            background: rgba(255,255,255,0.1);
-            border: none;
-            color: #fff;
-            padding: 0.4rem 0.8rem;
-            border-radius: 30px;
-            cursor: pointer;
+        
+        .step.completed .step-number {
+            background: #27ae60;
+            border-color: #27ae60;
+            color: white;
         }
-
-        .container { max-width: 1000px; margin: 0 auto; padding: 2rem; }
-
-        .hero-small {
-            background: linear-gradient(135deg, #1976D2, #0F3B6E);
-            border-radius: 20px;
-            padding: 1.5rem 2rem;
-            margin-bottom: 2rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .hero-small h2 { font-size: 1.5rem; margin-bottom: 0.3rem; }
-        .hero-small p { color: rgba(255,255,255,0.8); font-size: 0.85rem; }
-        .hero-small-icon { font-size: 3rem; opacity: 0.4; }
-
-        .form-grid {
+        
+        .main-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: 1fr 1.2fr;
             gap: 2rem;
         }
-        @media (max-width: 700px) { .form-grid { grid-template-columns: 1fr; } }
-
-        .vehicule-card, .form-card {
+        
+        .vehicle-card, .payment-card {
             background: rgba(255,255,255,0.07);
             border-radius: 20px;
             overflow: hidden;
             border: 1px solid rgba(97,179,250,0.2);
-            transition: transform 0.3s, box-shadow 0.3s;
         }
-        .vehicule-card:hover, .form-card:hover { transform: translateY(-5px); box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
-
-        .car-visual {
-            height: 180px;
+        
+        .card-header {
+            background: linear-gradient(135deg, #1976D2, #0F3B6E);
+            padding: 1rem 1.5rem;
+            font-weight: bold;
+        }
+        
+        .vehicle-image {
+            height: 200px;
             overflow: hidden;
-            position: relative;
         }
-        .car-visual img {
+        
+        .vehicle-image img {
             width: 100%;
             height: 100%;
             object-fit: cover;
         }
-        .car-badge {
-            position: absolute;
-            bottom: 10px;
-            right: 12px;
-            background: rgba(0,0,0,0.6);
-            backdrop-filter: blur(6px);
+        
+        .vehicle-info {
+            padding: 1.5rem;
+        }
+        
+        .vehicle-info h2 {
+            font-size: 1.3rem;
+            margin-bottom: 0.3rem;
+        }
+        
+        .info-tag {
+            display: inline-block;
+            background: rgba(255,255,255,0.08);
+            padding: 0.3rem 0.8rem;
             border-radius: 20px;
-            padding: 0.25rem 0.75rem;
-            font-size: 0.7rem;
+            font-size: 0.75rem;
+            margin-right: 0.5rem;
+            margin-top: 0.5rem;
         }
-        .vehicule-info { padding: 1.5rem; }
-        .info-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 0.8rem;
-            margin-top: 1rem;
+        
+        .form-group {
+            margin-bottom: 1.2rem;
         }
-        .info-item {
-            background: rgba(255,255,255,0.05);
-            border-radius: 10px;
-            padding: 0.7rem;
+        
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #61B3FA;
+            font-size: 0.85rem;
+            font-weight: 600;
         }
-        .info-item .lbl { font-size: 0.7rem; color: #A7A9AC; text-transform: uppercase; }
-        .info-item .val { font-size: 0.85rem; font-weight: 500; }
-
-        .form-card { padding: 2rem; }
-        .form-group { margin-bottom: 1.2rem; }
-        .form-group label { display: block; margin-bottom: 0.5rem; color: #61B3FA; font-size: 0.85rem; font-weight: 600; }
-        .form-group input, .form-group textarea {
+        
+        input, select {
             width: 100%;
             padding: 0.8rem;
             background: rgba(255,255,255,0.08);
@@ -214,212 +161,343 @@ $couleurHex = $couleurMap[$couleurNom] ?? '#7f8c8d';
             color: #fff;
             font-size: 0.9rem;
             outline: none;
+            transition: all 0.3s;
         }
-        .form-group input:focus, .form-group textarea:focus { border-color: #61B3FA; }
-        .field-error { color: #e74c3c; font-size: 0.75rem; margin-top: 0.25rem; display: block; }
-
-        .form-actions {
-            display: flex;
-            gap: 1rem;
-            justify-content: flex-end;
-            margin-top: 1.5rem;
+        
+        input:focus, select:focus {
+            border-color: #61B3FA;
+            background: rgba(97,179,250,0.1);
         }
-        .btn-annuler {
-            background: rgba(255,255,255,0.08);
-            color: #A7A9AC;
-            border: 1px solid rgba(255,255,255,0.2);
-            padding: 0.7rem 1.5rem;
+        
+        .prix-card {
+            background: linear-gradient(135deg, #2e7d32, #4caf50);
             border-radius: 12px;
-            cursor: pointer;
-            text-decoration: none;
+            padding: 1rem;
+            text-align: center;
+            margin: 1rem 0;
         }
-        .btn-confirmer {
+        
+        .prix-card .prix-value {
+            font-size: 2rem;
+            font-weight: bold;
+        }
+        
+        .btn-paiement {
+            width: 100%;
             background: linear-gradient(135deg, #1976D2, #61B3FA);
-            color: #fff;
             border: none;
-            padding: 0.7rem 1.5rem;
-            border-radius: 12px;
+            padding: 1rem;
+            border-radius: 30px;
+            color: white;
+            font-weight: bold;
+            font-size: 1.1rem;
             cursor: pointer;
-            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            transition: all 0.3s;
         }
-        .btn-confirmer:hover { transform: translateY(-2px); }
-
-        .toast {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            padding: 0.8rem 1.5rem;
-            border-radius: 10px;
-            z-index: 1000;
-            animation: slideIn 0.3s ease;
+        
+        .btn-paiement:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(25,118,210,0.4);
         }
-        .toast.success { background: #27ae60; color: white; }
-        @keyframes slideIn {
-            from { transform: translateX(100%); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
+        
+        .btn-paiement:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
         }
-
+        
+        .security-badge {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            margin-top: 1rem;
+            padding: 0.8rem;
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+            font-size: 0.8rem;
+            flex-wrap: wrap;
+        }
+        
+        .error-message {
+            background: rgba(231,76,60,0.2);
+            border: 1px solid rgba(231,76,60,0.4);
+            border-radius: 12px;
+            padding: 0.8rem;
+            margin-bottom: 1rem;
+            color: #e74c3c;
+            font-size: 0.85rem;
+            display: none;
+        }
+        
+        .error-message.show {
+            display: block;
+        }
+        
         @media (max-width: 768px) {
-            .navbar { flex-direction: column; gap: 1rem; }
+            .main-grid { grid-template-columns: 1fr; }
+            .progress-steps { flex-direction: column; gap: 1rem; }
+            .progress-steps::before { display: none; }
+            .reservation-container { padding: 0 1rem; }
         }
     </style>
 </head>
 <body>
 
-<nav class="navbar">
-    <div class="nav-left">
-        <a href="../index.php" class="logo"><i class="fas fa-leaf"></i><span>EcoRide</span></a>
-        <div class="dropdown">
-            <button class="dropdown-btn" onclick="toggleDropdown()"><i class="fas fa-bars"></i><span>Menu</span></button>
-            <div class="dropdown-content" id="dropdownMenu">
-                <a href="vehicules_disponibles.php"><i class="fas fa-car"></i> Covoiturages</a>
-                <a href="mes_reservations.php"><i class="fas fa-calendar-check"></i> Mes réservations</a>
-                <a href="mes_vehicules.php"><i class="fas fa-key"></i> Mes véhicules</a>
-                <a href="mon_historique.php"><i class="fas fa-history"></i> Mon historique</a>
-                <div class="dropdown-divider"></div>
-                <a href="../backoffice/admin.php" class="admin-link"><i class="fas fa-shield-alt"></i> Administration</a>
-                <a href="logout.php" class="logout-link"><i class="fas fa-sign-out-alt"></i> Déconnexion</a>
-            </div>
+<?php require_once __DIR__ . '/includes/navbar_moderne.php'; ?>
+
+<div class="reservation-container">
+    
+    <!-- Étapes de réservation -->
+    <div class="progress-steps">
+        <div class="step completed">
+            <div class="step-number"><i class="fas fa-check"></i></div>
+            <div>Choix véhicule</div>
+        </div>
+        <div class="step active">
+            <div class="step-number">2</div>
+            <div>Réservation</div>
+        </div>
+        <div class="step">
+            <div class="step-number">3</div>
+            <div>Paiement</div>
+        </div>
+        <div class="step">
+            <div class="step-number">4</div>
+            <div>Confirmation</div>
         </div>
     </div>
-    <div class="nav-right">
-        <button id="themeToggle" class="theme-btn"><i class="fas fa-moon"></i></button>
-        <div class="user-info"><i class="fas fa-user-circle"></i><span><?= $_SESSION['user_name'] ?? 'Utilisateur' ?></span></div>
-    </div>
-</nav>
-
-<div class="container">
-
-    <div class="hero-small">
-        <div class="hero-small-content">
-            <h2><i class="fas fa-calendar-plus"></i> Réserver un véhicule</h2>
-            <p>Confirmez votre réservation en quelques clics</p>
-        </div>
-        <div class="hero-small-icon"><i class="fas fa-calendar-check"></i></div>
-    </div>
-
-    <div class="form-grid">
-        <div class="vehicule-card">
-            <div class="car-visual">
-                <img src="../assets/generate_car_image.php?marque=<?= urlencode($vehicule['marque']) ?>&modele=<?= urlencode($vehicule['modele']) ?>&couleur=<?= urlencode($vehicule['couleur'] ?? 'bleu') ?>" 
-                     alt="<?= htmlspecialchars($vehicule['marque'] . ' ' . $vehicule['modele']) ?>">
-                <div class="car-badge">
-                    <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:<?= $couleurHex ?>;margin-right:5px;"></span>
-                    <?= ucfirst($vehicule['couleur'] ?? '—') ?> · <?= $vehicule['modele'] ?>
-                </div>
+    
+    <div class="main-grid">
+        <!-- Colonne gauche : Infos véhicule -->
+        <div class="vehicle-card">
+            <div class="card-header">
+                <i class="fas fa-car"></i> Votre véhicule
             </div>
-            <div class="vehicule-info">
+            <div class="vehicle-image">
+                <?php 
+                $photoPath = '/ecoride/assets/uploads/vehicules/' . ($vehicule['photo'] ?? '');
+                if (!empty($vehicule['photo']) && file_exists($_SERVER['DOCUMENT_ROOT'] . $photoPath)): ?>
+                    <img src="<?= $photoPath ?>" alt="Véhicule">
+                <?php else: ?>
+                    <div style="height:100%; background:linear-gradient(135deg,#1976D2,#0F3B6E); display:flex; align-items:center; justify-content:center;">
+                        <i class="fas fa-car" style="font-size: 4rem; opacity:0.5;"></i>
+                    </div>
+                <?php endif; ?>
+            </div>
+            <div class="vehicle-info">
                 <h2><?= htmlspecialchars($vehicule['marque'] . ' ' . $vehicule['modele']) ?></h2>
-                <div class="conducteur"><i class="fas fa-user"></i> <?= htmlspecialchars(($vehicule['prenom'] ?? '') . ' ' . ($vehicule['nom'] ?? '')) ?></div>
-                <div class="info-grid">
-                    <div class="info-item"><div class="lbl">Immatriculation</div><div class="val"><code><?= htmlspecialchars($vehicule['immatriculation']) ?></code></div></div>
-                    <div class="info-item"><div class="lbl">Places</div><div class="val"><i class="fas fa-users"></i> <?= $vehicule['capacite'] ?></div></div>
-                    <div class="info-item"><div class="lbl">Couleur</div><div class="val"><?= ucfirst($vehicule['couleur'] ?? '—') ?></div></div>
-                    <div class="info-item"><div class="lbl">Climatisation</div><div class="val"><?= $vehicule['climatisation'] ? '<i class="fas fa-snowflake"></i> Oui' : '<i class="fas fa-sun"></i> Non' ?></div></div>
+                <p><i class="fas fa-user"></i> <?= htmlspecialchars(($vehicule['prenom'] ?? '') . ' ' . ($vehicule['nom'] ?? '')) ?></p>
+                <div style="margin-top: 1rem;">
+                    <span class="info-tag"><i class="fas fa-id-card"></i> <?= htmlspecialchars($vehicule['immatriculation']) ?></span>
+                    <span class="info-tag"><i class="fas fa-users"></i> <?= $vehicule['capacite'] ?> places</span>
+                    <span class="info-tag"><?= $vehicule['climatisation'] ? '<i class="fas fa-snowflake"></i> Clim' : '<i class="fas fa-sun"></i> Sans clim' ?></span>
                 </div>
             </div>
         </div>
-
-        <form method="POST" action="reserver_vehicule.php" id="reservationForm" class="form-card">
-            <h3><i class="fas fa-calendar-plus"></i> Détails de la réservation</h3>
-            <input type="hidden" name="action" value="reserver">
-            <input type="hidden" name="vehicule_id" value="<?= $vehicule['id'] ?>">
-
-            <div class="form-group">
-                <label><i class="fas fa-calendar-alt"></i> Date de réservation <span style="color:#e74c3c">*</span></label>
-                <input type="text" name="date_reservation_display" id="dateReservation" placeholder="JJ/MM/AAAA" autocomplete="off">
-                <input type="hidden" name="date_reservation" id="dateReservationHidden">
-                <span class="field-error" id="dateError"></span>
+        
+        <!-- Colonne droite : Formulaire -->
+        <div class="payment-card">
+            <div class="card-header">
+                <i class="fas fa-file-signature"></i> Détails de la réservation
             </div>
-
-            <div class="form-group">
-                <label><i class="fas fa-sticky-note"></i> Note (optionnel)</label>
-                <textarea name="note" id="note" rows="3" placeholder="Ex: Je prendrai à 8h devant la gare…"></textarea>
-            </div>
-
-            <div class="form-actions">
-                <a href="vehicules_disponibles.php" class="btn-annuler"><i class="fas fa-times"></i> Annuler</a>
-                <button type="submit" class="btn-confirmer"><i class="fas fa-check"></i> Confirmer</button>
-            </div>
-        </form>
+            
+            <div id="errorMessage" class="error-message"></div>
+            
+            <form id="reservationForm" style="padding: 1.5rem;">
+                <input type="hidden" name="action" value="reserver">
+                <input type="hidden" name="vehicule_id" value="<?= $vehicule['id'] ?>">
+                
+                <div class="form-group">
+                    <label><i class="fas fa-map-marker-alt"></i> Destination *</label>
+                    <select name="trajet_id" id="trajetSelect" required>
+                        <option value="">-- Sélectionnez une destination --</option>
+                        <?php foreach ($trajets as $trajet): ?>
+                        <option value="<?= $trajet['id_T'] ?>" data-prix="<?= $trajet['prix_total'] ?? $trajet['prix'] ?? 0 ?>">
+                            🚩 <?= htmlspecialchars($trajet['point_depart'] ?? '?') ?> → 🏁 <?= htmlspecialchars($trajet['point_arrive'] ?? '?') ?> 
+                            (<?= number_format($trajet['prix_total'] ?? $trajet['prix'] ?? 0, 2) ?> DT)
+                        </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-users"></i> Nombre de places *</label>
+                    <input type="number" name="nb_places" id="nbPlaces" min="1" max="<?= $capaciteMax ?>" value="1" required>
+                </div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-calendar-alt"></i> Date de début *</label>
+                    <input type="date" name="date_debut" id="dateDebut" min="<?= date('Y-m-d') ?>" required>
+                </div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-calendar-alt"></i> Date de fin *</label>
+                    <input type="date" name="date_fin" id="dateFin" required>
+                </div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-clock"></i> Heure de prise en charge *</label>
+                    <input type="time" name="heure" id="heure" value="09:00" required>
+                </div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-comment"></i> Note (optionnel)</label>
+                    <input type="text" name="note" placeholder="Informations supplémentaires...">
+                </div>
+                
+                <!-- Affichage du prix -->
+                <div class="prix-card">
+                    <div style="opacity:0.8;">Total à payer</div>
+                    <div class="prix-value" id="prixDisplay">0.00 DT</div>
+                    <div style="font-size:0.7rem;">TTC - Paiement sécurisé</div>
+                </div>
+                
+                <!-- Bouton Continuer vers paiement -->
+                <button type="submit" class="btn-paiement" id="submitBtn">
+                    <i class="fas fa-credit-card"></i> Continuer vers paiement
+                    <i class="fas fa-arrow-right"></i>
+                </button>
+                
+                <div class="security-badge">
+                    <i class="fas fa-lock"></i>
+                    <span>Paiement 100% sécurisé</span>
+                    <i class="fas fa-hand-holding-usd"></i>
+                    <i class="fas fa-university"></i>
+                    <i class="fab fa-cc-visa"></i>
+                    <i class="fab fa-cc-mastercard"></i>
+                    <i class="fab fa-cc-paypal"></i>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
 
 <script>
-function toggleDropdown() { document.getElementById("dropdownMenu").classList.toggle("show"); }
-window.onclick = function(event) {
-    if (!event.target.matches('.dropdown-btn')) {
-        var dropdowns = document.getElementsByClassName("dropdown-content");
-        for (var i = 0; i < dropdowns.length; i++) {
-            if (dropdowns[i].classList.contains('show')) dropdowns[i].classList.remove('show');
+// Mise à jour dynamique du prix
+const trajetSelect = document.getElementById('trajetSelect');
+const nbPlacesInput = document.getElementById('nbPlaces');
+const prixDisplay = document.getElementById('prixDisplay');
+let prixTrajetBase = 0;
+
+function calculerPrixTotal() {
+    const nbPlaces = parseInt(nbPlacesInput.value) || 1;
+    if (prixTrajetBase <= 0) {
+        prixDisplay.innerHTML = '0.00 DT';
+        return;
+    }
+    const total = prixTrajetBase * nbPlaces;
+    prixDisplay.innerHTML = total.toFixed(2) + ' DT';
+}
+
+if (trajetSelect) {
+    trajetSelect.addEventListener('change', function() {
+        const selectedOption = this.options[this.selectedIndex];
+        prixTrajetBase = parseFloat(selectedOption.dataset.prix) || 0;
+        calculerPrixTotal();
+    });
+}
+
+if (nbPlacesInput) {
+    nbPlacesInput.addEventListener('input', calculerPrixTotal);
+}
+
+// Validation date fin >= date début
+const dateDebut = document.getElementById('dateDebut');
+const dateFin = document.getElementById('dateFin');
+
+if (dateDebut) {
+    dateDebut.addEventListener('change', function() {
+        if (dateFin) {
+            dateFin.min = this.value;
+            if (dateFin.value < this.value) {
+                dateFin.value = this.value;
+            }
         }
+    });
+}
+
+// Afficher une erreur
+function showError(message) {
+    const errorDiv = document.getElementById('errorMessage');
+    if (errorDiv) {
+        errorDiv.innerHTML = '<i class="fas fa-exclamation-circle"></i> ' + message;
+        errorDiv.classList.add('show');
+        setTimeout(() => {
+            errorDiv.classList.remove('show');
+        }, 5000);
     }
 }
 
-function formatDate(value) {
-    let cleaned = value.replace(/\D/g, '');
-    if (cleaned.length >= 2 && cleaned.length < 4) cleaned = cleaned.substring(0,2) + '/' + cleaned.substring(2);
-    else if (cleaned.length >= 4 && cleaned.length < 6) cleaned = cleaned.substring(0,2) + '/' + cleaned.substring(2,4) + '/' + cleaned.substring(4);
-    else if (cleaned.length >= 6) cleaned = cleaned.substring(0,2) + '/' + cleaned.substring(2,4) + '/' + cleaned.substring(4,8);
-    return cleaned;
+// Soumission AJAX vers le contrôleur
+const reservationForm = document.getElementById('reservationForm');
+if (reservationForm) {
+    reservationForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        if (!trajetSelect || !trajetSelect.value) {
+            showError('Veuillez sélectionner une destination.');
+            return;
+        }
+        
+        if (!dateDebut || !dateDebut.value) {
+            showError('Veuillez sélectionner une date de début.');
+            return;
+        }
+        
+        if (!dateFin || !dateFin.value) {
+            showError('Veuillez sélectionner une date de fin.');
+            return;
+        }
+        
+        const submitBtn = document.getElementById('submitBtn');
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Création en cours...';
+        
+        const formData = new FormData(this);
+        
+        try {
+            // ✅ URL CORRIGÉE - appelle l'API dédiée
+            const response = await fetch('/ecoride/View/frontoffice/reservation_api.php', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                // Rediriger vers le choix du mode de paiement
+                window.location.href = '/ecoride/View/frontoffice/choix_paiement.php?id=' + result.reservation_id;
+            } else {
+                showError(result.message);
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fas fa-credit-card"></i> Continuer vers paiement <i class="fas fa-arrow-right"></i>';
+            }
+        } catch (error) {
+            console.error('Erreur:', error);
+            showError('Erreur technique. Veuillez réessayer.');
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-credit-card"></i> Continuer vers paiement <i class="fas fa-arrow-right"></i>';
+        }
+    });
 }
 
-function validateDate() {
-    const input = document.getElementById('dateReservation');
-    const hidden = document.getElementById('dateReservationHidden');
-    const error = document.getElementById('dateError');
-    let value = input.value.trim();
-    if (!value) { error.innerHTML = 'La date est obligatoire.'; return false; }
-    const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-    if (!match) { error.innerHTML = 'Format JJ/MM/AAAA'; return false; }
-    const day = parseInt(match[1]), month = parseInt(match[2]), year = parseInt(match[3]);
-    if (month < 1 || month > 12) { error.innerHTML = 'Mois invalide'; return false; }
-    const daysInMonth = new Date(year, month, 0).getDate();
-    if (day < 1 || day > daysInMonth) { error.innerHTML = 'Jour invalide'; return false; }
-    const selected = new Date(year, month-1, day);
-    const today = new Date(); today.setHours(0,0,0,0);
-    if (selected < today) { error.innerHTML = 'Date non passée'; return false; }
-    error.innerHTML = '';
-    hidden.value = `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-    return true;
+// Initialiser le prix si une destination est pré-sélectionnée
+if (trajetSelect && trajetSelect.value) {
+    const selectedOption = trajetSelect.options[trajetSelect.selectedIndex];
+    prixTrajetBase = parseFloat(selectedOption.dataset.prix) || 0;
+    calculerPrixTotal();
 }
 
-const dateInput = document.getElementById('dateReservation');
-dateInput.addEventListener('input', function() {
-    let pos = this.selectionStart;
-    let oldLen = this.value.length;
-    let formatted = formatDate(this.value);
-    this.value = formatted;
-    let newLen = formatted.length;
-    this.setSelectionRange(pos + (newLen - oldLen), pos + (newLen - oldLen));
-    validateDate();
-});
-dateInput.addEventListener('blur', validateDate);
-
-document.getElementById('reservationForm').addEventListener('submit', function(e) {
-    if (!validateDate()) e.preventDefault();
-});
-
-function showToast(message, type) {
-    const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    toast.innerHTML = `<i class="fas fa-check-circle"></i> ${message}`;
-    document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 3000);
-}
-
-const themeToggle = document.getElementById('themeToggle');
+// Thème clair/sombre
 if (localStorage.getItem('theme') === 'light') {
     document.body.classList.add('light-mode');
-    themeToggle.innerHTML = '<i class="fas fa-sun"></i>';
 }
-themeToggle.addEventListener('click', () => {
-    document.body.classList.toggle('light-mode');
-    const isLight = document.body.classList.contains('light-mode');
-    localStorage.setItem('theme', isLight ? 'light' : 'dark');
-    themeToggle.innerHTML = isLight ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
-    showToast(isLight ? 'Mode clair activé' : 'Mode sombre activé', 'success');
-});
 </script>
+
 </body>
 </html>

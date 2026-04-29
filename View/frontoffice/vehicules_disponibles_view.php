@@ -1,6 +1,17 @@
 <?php
 if (session_status() === PHP_SESSION_NONE) session_start();
-// Les variables $vehicules viennent du contrôleur
+
+// Vérifier si la variable $vehicules existe, sinon la définir comme tableau vide
+if (!isset($vehicules)) {
+    $vehicules = [];
+}
+
+// Vérifier les autres variables
+$search = $search ?? '';
+$villeFilter = $villeFilter ?? '';
+$marqueFilter = $marqueFilter ?? '';
+$placesMin = $placesMin ?? '';
+$climFilter = $climFilter ?? '';
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -266,6 +277,33 @@ if (session_status() === PHP_SESSION_NONE) session_start();
         }
         .vehicule-card:hover .card-image img { transform: scale(1.05); }
 
+        /* Style pour pas d'image */
+        .no-image {
+            background: linear-gradient(135deg, #1976D2, #0F3B6E);
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+        }
+        .no-image i {
+            font-size: 60px;
+            color: rgba(255,255,255,0.3);
+            margin-bottom: 10px;
+        }
+        .no-image span {
+            background: rgba(0,0,0,0.4);
+            padding: 6px 20px;
+            border-radius: 30px;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        .no-image span small {
+            color: #61B3FA;
+            font-size: 14px;
+        }
+
         .card-content { padding: 1rem; }
         .card-title { font-size: 1.1rem; font-weight: bold; margin-bottom: 0.3rem; }
         .card-driver { font-size: 0.8rem; color: #A7A9AC; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 5px; }
@@ -334,27 +372,7 @@ if (session_status() === PHP_SESSION_NONE) session_start();
 </head>
 <body>
 
-<nav class="navbar">
-    <div class="nav-left">
-        <a href="../index.php" class="logo"><i class="fas fa-leaf"></i><span>EcoRide</span></a>
-        <div class="dropdown">
-            <button class="dropdown-btn" onclick="toggleDropdown()"><i class="fas fa-bars"></i><span>Menu</span></button>
-            <div class="dropdown-content" id="dropdownMenu">
-                <a href="vehicules_disponibles.php" class="active"><i class="fas fa-car"></i> Covoiturages</a>
-                <a href="mes_reservations.php"><i class="fas fa-calendar-check"></i> Mes réservations</a>
-                <a href="mes_vehicules.php"><i class="fas fa-key"></i> Mes véhicules</a>
-                <a href="mon_historique.php"><i class="fas fa-history"></i> Mon historique</a>
-                <div class="dropdown-divider"></div>
-                <a href="../backoffice/admin.php" class="admin-link"><i class="fas fa-shield-alt"></i> Administration</a>
-                <a href="logout.php" class="logout-link"><i class="fas fa-sign-out-alt"></i> Déconnexion</a>
-            </div>
-        </div>
-    </div>
-    <div class="nav-right">
-        <button id="themeToggle" class="theme-btn"><i class="fas fa-moon"></i></button>
-        <div class="user-info"><i class="fas fa-user-circle"></i><span><?= $_SESSION['user_name'] ?? 'Utilisateur' ?></span></div>
-    </div>
-</nav>
+<?php require_once __DIR__ . '/includes/navbar_moderne.php'; ?>
 
 <div class="container">
 
@@ -385,7 +403,10 @@ if (session_status() === PHP_SESSION_NONE) session_start();
     </div>
 
     <?php if (empty($vehicules)): ?>
-        <div class="empty-state"><i class="fas fa-car-side"></i><p>Aucun véhicule disponible pour le moment.</p></div>
+        <div class="empty-state">
+            <i class="fas fa-car-side"></i>
+            <p>Aucun véhicule disponible pour le moment.</p>
+        </div>
     <?php else: ?>
         <div class="vehicules-grid" id="vehiculesGrid">
             <?php foreach ($vehicules as $v): 
@@ -397,12 +418,12 @@ if (session_status() === PHP_SESSION_NONE) session_start();
                     <?php if (!empty($v['photo']) && file_exists($fullServerPath)): ?>
                         <img src="<?= $photoPath ?>" alt="<?= htmlspecialchars($v['marque'] . ' ' . $v['modele']) ?>">
                     <?php else: ?>
-                        <div style="background: linear-gradient(135deg, #1976D2, #0F3B6E); height: 100%; display: flex; align-items: center; justify-content: center; flex-direction: column;">
-                            <i class="fas fa-car" style="font-size: 60px; color: rgba(255,255,255,0.3); margin-bottom: 10px;"></i>
-                            <div style="background: rgba(0,0,0,0.4); padding: 6px 20px; border-radius: 30px;">
-                                <span style="color: white; font-size: 16px; font-weight: bold;"><?= htmlspecialchars($v['marque']) ?></span>
-                                <span style="color: #61B3FA; font-size: 14px;"> <?= htmlspecialchars($v['modele']) ?></span>
-                            </div>
+                        <div class="no-image">
+                            <i class="fas fa-car"></i>
+                            <span>
+                                <?= htmlspecialchars($v['marque']) ?> 
+                                <small><?= htmlspecialchars($v['modele']) ?></small>
+                            </span>
                         </div>
                     <?php endif; ?>
                 </div>
@@ -423,16 +444,28 @@ if (session_status() === PHP_SESSION_NONE) session_start();
 </div>
 
 <script>
-function toggleDropdown() { document.getElementById("dropdownMenu").classList.toggle("show"); }
+// Menu toggle
+function toggleMenu() {
+    document.getElementById('navLinks')?.classList.toggle('show');
+}
+
+function toggleDropdown() { 
+    document.getElementById("dropdownMenu")?.classList.toggle("show"); 
+}
+
+// Fermer dropdown si on clique ailleurs
 window.onclick = function(event) {
     if (!event.target.matches('.dropdown-btn')) {
         var dropdowns = document.getElementsByClassName("dropdown-content");
         for (var i = 0; i < dropdowns.length; i++) {
-            if (dropdowns[i].classList.contains('show')) dropdowns[i].classList.remove('show');
+            if (dropdowns[i].classList.contains('show')) {
+                dropdowns[i].classList.remove('show');
+            }
         }
     }
 }
 
+// Filtres
 const searchInput = document.getElementById('searchInput');
 const filterPlaces = document.getElementById('filterPlaces');
 const filterClim = document.getElementById('filterClim');
@@ -441,27 +474,38 @@ const cards = document.querySelectorAll('.vehicule-card');
 const countBadge = document.querySelector('.count-badge');
 
 function filterVehicules() {
-    const searchTerm = searchInput.value.toLowerCase();
-    const places = filterPlaces.value;
-    const clim = filterClim.value;
+    const searchTerm = searchInput?.value.toLowerCase() || '';
+    const places = filterPlaces?.value || '';
+    const clim = filterClim?.value || '';
     let visible = 0;
+    
     cards.forEach(card => {
         let show = true;
-        const title = card.querySelector('.card-title').innerText.toLowerCase();
-        const driver = card.querySelector('.card-driver').innerText.toLowerCase();
+        const title = card.querySelector('.card-title')?.innerText.toLowerCase() || '';
+        const driver = card.querySelector('.card-driver')?.innerText.toLowerCase() || '';
+        
         if (searchTerm && !title.includes(searchTerm) && !driver.includes(searchTerm)) show = false;
         if (places && card.dataset.places != places) show = false;
         if (clim !== '' && card.dataset.clim != clim) show = false;
+        
         card.style.display = show ? 'block' : 'none';
         if (show) visible++;
     });
-    countBadge.innerText = visible + ' véhicules';
+    
+    if (countBadge) countBadge.innerText = visible + ' véhicules';
 }
 
-searchInput.addEventListener('input', filterVehicules);
-filterPlaces.addEventListener('change', filterVehicules);
-filterClim.addEventListener('change', filterVehicules);
-resetBtn.addEventListener('click', () => { searchInput.value = ''; filterPlaces.value = ''; filterClim.value = ''; filterVehicules(); });
+if (searchInput) searchInput.addEventListener('input', filterVehicules);
+if (filterPlaces) filterPlaces.addEventListener('change', filterVehicules);
+if (filterClim) filterClim.addEventListener('change', filterVehicules);
+if (resetBtn) {
+    resetBtn.addEventListener('click', () => { 
+        if (searchInput) searchInput.value = ''; 
+        if (filterPlaces) filterPlaces.value = ''; 
+        if (filterClim) filterClim.value = ''; 
+        filterVehicules(); 
+    });
+}
 
 function showToast(message, type) {
     const toast = document.createElement('div');
@@ -471,18 +515,21 @@ function showToast(message, type) {
     setTimeout(() => toast.remove(), 3000);
 }
 
+// Mode clair/sombre
 const themeToggle = document.getElementById('themeToggle');
-if (localStorage.getItem('theme') === 'light') {
-    document.body.classList.add('light-mode');
-    themeToggle.innerHTML = '<i class="fas fa-sun"></i>';
+if (themeToggle) {
+    if (localStorage.getItem('theme') === 'light') {
+        document.body.classList.add('light-mode');
+        themeToggle.innerHTML = '<i class="fas fa-sun"></i>';
+    }
+    themeToggle.addEventListener('click', () => {
+        document.body.classList.toggle('light-mode');
+        const isLight = document.body.classList.contains('light-mode');
+        localStorage.setItem('theme', isLight ? 'light' : 'dark');
+        themeToggle.innerHTML = isLight ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
+        showToast(isLight ? 'Mode clair activé' : 'Mode sombre activé', 'info');
+    });
 }
-themeToggle.addEventListener('click', () => {
-    document.body.classList.toggle('light-mode');
-    const isLight = document.body.classList.contains('light-mode');
-    localStorage.setItem('theme', isLight ? 'light' : 'dark');
-    themeToggle.innerHTML = isLight ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
-    showToast(isLight ? 'Mode clair activé' : 'Mode sombre activé', 'info');
-});
 </script>
 </body>
 </html>

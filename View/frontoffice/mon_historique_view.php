@@ -1,289 +1,228 @@
 <?php
 if (session_status() === PHP_SESSION_NONE) session_start();
+
+if (!isset($vehicules))    $vehicules    = [];
+if (!isset($reservations)) $reservations = [];
+if (!isset($stats))        $stats = ['confirmees' => 0, 'annulees' => 0, 'en_attente' => 0];
+if (!isset($userId))       $userId = $_SESSION['user_id'] ?? 0;
+
+/* ── Détection du mode : liste ou page détail ── */
+$mode     = $_GET['mode'] ?? 'liste';   // 'liste' | 'vehicule' | 'reservation'
+$detailId = intval($_GET['id'] ?? 0);
+
+/* ── Récupération de l'item à afficher ── */
+$detailVehicule    = null;
+$detailReservation = null;
+$linkedResas       = [];
+
+if ($mode === 'vehicule' && $detailId) {
+    foreach ($vehicules as $v) {
+        if ($v['id'] == $detailId) { $detailVehicule = $v; break; }
+    }
+    foreach ($reservations as $r) {
+        if ($r['vehicule_id'] == $detailId) $linkedResas[] = $r;
+    }
+}
+
+if ($mode === 'reservation' && $detailId) {
+    foreach ($reservations as $r) {
+        if ($r['id'] == $detailId) { $detailReservation = $r; break; }
+    }
+    if ($detailReservation) {
+        foreach ($vehicules as $v) {
+            if ($v['id'] == $detailReservation['vehicule_id']) { $detailVehicule = $v; break; }
+        }
+    }
+}
+
+/* URL de base (même page, sans query string) */
+$baseUrl = strtok($_SERVER['REQUEST_URI'], '?');
 ?>
 <!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mon Historique | EcoRide</title>
+    <title><?php
+        if ($mode === 'vehicule' && $detailVehicule)
+            echo htmlspecialchars($detailVehicule['marque'].' '.$detailVehicule['modele']).' | EcoRide';
+        elseif ($mode === 'reservation' && $detailReservation)
+            echo 'Reservation #'.$detailReservation['id'].' | EcoRide';
+        else
+            echo 'Mon Historique | EcoRide';
+    ?></title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #0A1628;
-            color: #fff;
-            transition: background 0.3s, color 0.3s;
-        }
-
-        /* Mode clair */
-        body.light-mode {
-            background: #f5f5f5;
-            color: #333;
-        }
-        body.light-mode .navbar {
-            background: #fff;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        body.light-mode .navbar .logo,
-        body.light-mode .navbar .dropdown-btn,
-        body.light-mode .navbar .user-info {
-            color: #1976D2;
-        }
-        body.light-mode .dropdown-content {
-            background: #fff;
-            border: 1px solid #e0e0e0;
-        }
-        body.light-mode .dropdown-content a {
-            color: #333;
-        }
-        body.light-mode .table-wrap {
-            background: #fff;
-            border-color: #e0e0e0;
-        }
-        body.light-mode .hero-small {
-            background: linear-gradient(135deg, #1565C0, #0D47A1);
-        }
-        body.light-mode .stat-card {
-            background: #fff;
-            border-color: #e0e0e0;
-        }
-
-        /* NAVBAR (identique) */
-        .navbar {
-            background: linear-gradient(90deg, #1976D2, #0F3B6E);
-            padding: 0.8rem 2rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            position: sticky;
-            top: 0;
-            z-index: 100;
-        }
-        .nav-left { display: flex; align-items: center; gap: 2rem; }
-        .logo { display: flex; align-items: center; gap: 8px; font-size: 1.3rem; font-weight: 700; color: #fff; text-decoration: none; }
-        .logo i { color: #61B3FA; }
-        .dropdown { position: relative; display: inline-block; }
-        .dropdown-btn {
-            background: rgba(255,255,255,0.1);
-            color: #fff;
-            padding: 0.6rem 1.2rem;
-            border: 1px solid rgba(97,179,250,.4);
-            border-radius: 30px;
-            font-size: 0.9rem;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .dropdown-content {
-            display: none;
-            position: absolute;
-            top: 110%;
-            left: 0;
-            min-width: 220px;
-            background: linear-gradient(145deg, #0D1F3A, #122A4A);
-            border: 1px solid rgba(97,179,250,.3);
-            border-radius: 12px;
-            box-shadow: 0 8px 30px rgba(0,0,0,.4);
-            z-index: 200;
-            overflow: hidden;
-        }
-        .dropdown-content.show { display: block; animation: fadeInDown 0.25s ease; }
-        @keyframes fadeInDown {
-            from { opacity: 0; transform: translateY(-10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .dropdown-content a {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 0.8rem 1.2rem;
-            color: #fff;
-            text-decoration: none;
-            font-size: 0.85rem;
-            transition: all 0.2s;
-        }
-        .dropdown-content a i { width: 20px; color: #61B3FA; }
-        .dropdown-content a:hover { background: rgba(97,179,250,.15); padding-left: 1.5rem; }
-        .dropdown-content a.active { background: rgba(25,118,210,.3); border-left: 3px solid #61B3FA; }
-        .dropdown-divider { height: 1px; background: rgba(97,179,250,.2); margin: 0.3rem 0; }
-        .nav-right { display: flex; align-items: center; gap: 1rem; }
-        .user-info {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            background: rgba(255,255,255,0.1);
-            padding: 0.4rem 1rem;
-            border-radius: 30px;
-            font-size: 0.85rem;
-        }
-        .theme-btn {
-            background: rgba(255,255,255,0.1);
-            border: none;
-            color: #fff;
-            padding: 0.4rem 0.8rem;
-            border-radius: 30px;
-            cursor: pointer;
-        }
-
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0A1628; color: #fff; }
         .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
 
-        /* Hero Small */
+        /* Hero */
         .hero-small {
             background: linear-gradient(135deg, #1976D2, #0F3B6E);
-            border-radius: 20px;
-            padding: 1.5rem 2rem;
-            margin-bottom: 2rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            border-radius: 20px; padding: 1.5rem 2rem; margin-bottom: 2rem;
+            display: flex; justify-content: space-between; align-items: center;
         }
         .hero-small h2 { font-size: 1.5rem; margin-bottom: 0.3rem; }
-        .hero-small p { color: rgba(255,255,255,0.8); font-size: 0.85rem; }
+        .hero-small p  { color: rgba(255,255,255,0.8); font-size: 0.85rem; }
         .hero-small-icon { font-size: 3rem; opacity: 0.4; }
 
         /* Stats */
         .stats-row {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-            gap: 1rem;
-            margin-bottom: 2rem;
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem; margin-bottom: 2rem;
         }
         .stat-card {
-            background: rgba(255,255,255,0.07);
-            border-radius: 16px;
-            padding: 1rem;
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            border: 1px solid rgba(97,179,250,0.2);
-            transition: transform 0.3s;
+            background: rgba(255,255,255,0.07); border-radius: 16px; padding: 1rem;
+            display: flex; align-items: center; gap: 1rem; border: 1px solid rgba(97,179,250,0.2);
         }
-        .stat-card:hover { transform: translateY(-3px); border-color: #61B3FA; }
         .stat-card .icon {
-            width: 45px;
-            height: 45px;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.3rem;
+            width: 45px; height: 45px; background: rgba(97,179,250,0.15);
+            border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.3rem;
         }
-        .stat-card .icon.blue { background: rgba(97,179,250,0.15); color: #61B3FA; }
-        .stat-card .icon.green { background: rgba(39,174,96,0.15); color: #27ae60; }
-        .stat-card .icon.red { background: rgba(231,76,60,0.15); color: #e74c3c; }
-        .stat-card .icon.gold { background: rgba(241,196,15,0.15); color: #f1c40f; }
+        .stat-card .icon.blue  { color: #61B3FA; }
+        .stat-card .icon.green { color: #27ae60; }
+        .stat-card .icon.red   { color: #e74c3c; }
+        .stat-card .icon.gold  { color: #f1c40f; }
         .stat-card .num { font-size: 1.5rem; font-weight: bold; }
         .stat-card .lbl { font-size: 0.7rem; color: #A7A9AC; }
 
         /* Tabs */
-        .tabs {
-            display: flex;
-            gap: 0.5rem;
-            margin-bottom: 1.5rem;
-            border-bottom: 2px solid rgba(97,179,250,0.15);
-        }
+        .tabs { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; border-bottom: 2px solid rgba(97,179,250,0.15); }
         .tab-btn {
-            padding: 0.7rem 1.5rem;
-            background: none;
-            border: none;
-            color: #A7A9AC;
-            font-size: 0.9rem;
-            cursor: pointer;
-            border-bottom: 3px solid transparent;
-            transition: all 0.3s;
+            padding: 0.7rem 1.5rem; background: none; border: none;
+            color: #A7A9AC; font-size: 0.9rem; cursor: pointer;
+            border-bottom: 3px solid transparent; transition: color 0.2s;
         }
         .tab-btn.active { color: #61B3FA; border-bottom-color: #61B3FA; }
-        .tab-content { display: none; animation: fadeIn 0.3s ease; }
+        .tab-content { display: none; }
         .tab-content.active { display: block; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
         /* Table */
         .table-wrap {
-            background: rgba(255,255,255,0.05);
-            border-radius: 16px;
-            overflow: hidden;
-            border: 1px solid rgba(97,179,250,0.15);
+            background: rgba(255,255,255,0.05); border-radius: 16px;
+            overflow-x: auto; border: 1px solid rgba(97,179,250,0.15);
         }
         .table-top {
-            padding: 1rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            padding: 1rem; display: flex; justify-content: space-between; align-items: center;
             border-bottom: 1px solid rgba(97,179,250,0.15);
         }
         table { width: 100%; border-collapse: collapse; }
-        th { text-align: left; padding: 0.8rem; color: #61B3FA; font-size: 0.75rem; text-transform: uppercase; }
-        td { padding: 0.8rem; border-bottom: 1px solid rgba(255,255,255,0.05); }
-        .badge {
-            padding: 0.2rem 0.6rem;
-            border-radius: 20px;
-            font-size: 0.7rem;
-        }
-        .badge-disponible { background: rgba(39,174,96,0.2); color: #27ae60; }
-        .badge-indisponible { background: rgba(231,76,60,0.2); color: #e74c3c; }
+        th { text-align: left; padding: 0.8rem; color: #61B3FA; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; }
+        td { padding: 0.8rem; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.87rem; vertical-align: middle; }
+        tbody tr:hover { background: rgba(97,179,250,0.04); }
+
+        /* Badges */
+        .badge { padding: 0.2rem 0.6rem; border-radius: 20px; font-size: 0.7rem; font-weight: 600; }
+        .badge-disponible     { background: rgba(39,174,96,0.2);  color: #27ae60; }
+        .badge-indisponible   { background: rgba(231,76,60,0.2);  color: #e74c3c; }
         .badge-en_maintenance { background: rgba(241,196,15,0.2); color: #f1c40f; }
+        .badge-confirmee      { background: rgba(39,174,96,0.2);  color: #27ae60; }
+        .badge-annulee        { background: rgba(231,76,60,0.2);  color: #e74c3c; }
+        .badge-en_attente     { background: rgba(241,196,15,0.2); color: #f1c40f; }
 
-        .toast {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            padding: 0.8rem 1.5rem;
-            border-radius: 10px;
-            z-index: 1000;
-            animation: slideIn 0.3s ease;
+        code { background: rgba(97,179,250,0.12); padding: 2px 6px; border-radius: 6px; color: #61B3FA; font-size: 0.82rem; }
+
+        /* Btn Détails - icône uniquement (rond) */
+        .btn-detail {
+            background: rgba(97,179,250,0.15); border: 1px solid rgba(97,179,250,0.3);
+            color: #61B3FA; width: 34px; height: 34px; border-radius: 50%;
+            cursor: pointer; font-size: 0.9rem; transition: all 0.2s;
+            display: inline-flex; align-items: center; justify-content: center;
+            text-decoration: none;
         }
-        .toast.info { background: #1976D2; color: white; }
-        @keyframes slideIn {
-            from { transform: translateX(100%); opacity: 0; }
-            to { transform: translateX(0%); opacity: 1; }
+        .btn-detail:hover { background: rgba(97,179,250,0.3); transform: translateY(-1px) scale(1.05); }
+
+        /* ══ PAGE DÉTAIL ══ */
+        .back-btn {
+            display: inline-flex; align-items: center; gap: 8px;
+            color: #61B3FA; text-decoration: none; font-size: 0.88rem;
+            margin-bottom: 1.5rem; padding: 0.5rem 1.1rem;
+            background: rgba(97,179,250,0.1); border: 1px solid rgba(97,179,250,0.25);
+            border-radius: 30px; transition: all 0.2s;
+        }
+        .back-btn:hover { background: rgba(97,179,250,0.22); transform: translateX(-3px); }
+
+        .detail-page {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+        }
+        @media (max-width: 768px) { .detail-page { grid-template-columns: 1fr; } }
+
+        .detail-card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(97,179,250,0.2);
+            border-radius: 18px; overflow: hidden;
         }
 
-        @media (max-width: 768px) {
-            .navbar { flex-direction: column; gap: 1rem; }
-            .stats-row { grid-template-columns: 1fr 1fr; }
-            .table-wrap { overflow-x: auto; }
+        .dc-header {
+            background: linear-gradient(135deg, #1976D2, #0F3B6E);
+            padding: 1rem 1.4rem;
+            display: flex; align-items: center; gap: 10px;
+        }
+        .dc-header .icon-circle {
+            width: 36px; height: 36px; background: rgba(255,255,255,0.2);
+            border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1rem;
+        }
+        .dc-header h3 { font-size: 1rem; }
+
+        .dc-row {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 0.75rem 1.4rem;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .dc-row:last-child { border-bottom: none; }
+        .dc-lbl { color: #8899BB; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
+        .dc-val { font-weight: 600; font-size: 0.9rem; display: flex; align-items: center; gap: 8px; }
+
+        .color-dot {
+            display: inline-block; width: 14px; height: 14px;
+            border-radius: 50%; border: 2px solid rgba(255,255,255,0.25); flex-shrink: 0;
+        }
+
+        /* Liste réservations liées */
+        .resa-link-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 0.75rem 1.4rem;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            text-decoration: none; color: inherit; transition: background 0.2s;
+        }
+        .resa-link-item:last-child { border-bottom: none; }
+        .resa-link-item:hover { background: rgba(97,179,250,0.06); }
+
+        .alert-notfound {
+            background: rgba(231,76,60,0.1); border: 1px solid rgba(231,76,60,0.3);
+            border-radius: 14px; padding: 2rem; text-align: center; color: #e74c3c;
         }
     </style>
 </head>
 <body>
 
-<nav class="navbar">
-    <div class="nav-left">
-        <a href="../index.php" class="logo"><i class="fas fa-leaf"></i><span>EcoRide</span></a>
-        <div class="dropdown">
-            <button class="dropdown-btn" onclick="toggleDropdown()"><i class="fas fa-bars"></i><span>Menu</span></button>
-            <div class="dropdown-content" id="dropdownMenu">
-                <a href="vehicules_disponibles.php"><i class="fas fa-car"></i> Covoiturages</a>
-                <a href="mes_reservations.php"><i class="fas fa-calendar-check"></i> Mes réservations</a>
-                <a href="mes_vehicules.php"><i class="fas fa-key"></i> Mes véhicules</a>
-                <a href="mon_historique.php" class="active"><i class="fas fa-history"></i> Mon historique</a>
-                <div class="dropdown-divider"></div>
-                <a href="../backoffice/admin.php" class="admin-link"><i class="fas fa-shield-alt"></i> Administration</a>
-                <a href="logout.php" class="logout-link"><i class="fas fa-sign-out-alt"></i> Déconnexion</a>
-            </div>
-        </div>
-    </div>
-    <div class="nav-right">
-        <button id="themeToggle" class="theme-btn"><i class="fas fa-moon"></i></button>
-        <div class="user-info"><i class="fas fa-user-circle"></i><span><?= $_SESSION['user_name'] ?? 'Utilisateur' ?></span></div>
-    </div>
-</nav>
+<?php require_once __DIR__ . '/includes/navbar_moderne.php'; ?>
 
 <div class="container">
 
-    <!-- Hero Small -->
+    <!-- ══ HEADER — toujours visible ══ -->
     <div class="hero-small">
         <div class="hero-small-content">
-            <h2><i class="fas fa-history"></i> Mon Historique</h2>
-            <p>Retrouvez tous vos véhicules et réservations passées</p>
+            <?php if ($mode === 'vehicule' && $detailVehicule): ?>
+                <h2><i class="fas fa-car"></i> <?= htmlspecialchars($detailVehicule['marque'].' '.$detailVehicule['modele']) ?></h2>
+                <p>Détail du véhicule &middot; <code><?= htmlspecialchars($detailVehicule['immatriculation']) ?></code></p>
+            <?php elseif ($mode === 'reservation' && $detailReservation): ?>
+                <h2><i class="fas fa-calendar-check"></i> Réservation #<?= $detailReservation['id'] ?></h2>
+                <p>Détail de la réservation &middot; <?= date('d/m/Y', strtotime($detailReservation['date_reservation'])) ?></p>
+            <?php else: ?>
+                <h2><i class="fas fa-history"></i> Mon Historique</h2>
+                <p>Retrouvez tous vos véhicules et réservations passées</p>
+            <?php endif; ?>
         </div>
-        <div class="hero-small-icon"><i class="fas fa-chart-line"></i></div>
+        <div class="hero-small-icon">
+            <i class="fas <?= $mode === 'vehicule' ? 'fa-car' : ($mode === 'reservation' ? 'fa-calendar-check' : 'fa-chart-line') ?>"></i>
+        </div>
     </div>
 
-    <!-- Stats -->
+    <!-- ══ STATS — toujours visibles ══ -->
     <div class="stats-row">
         <div class="stat-card"><div class="icon blue"><i class="fas fa-car"></i></div><div><div class="num"><?= count($vehicules) ?></div><div class="lbl">Véhicule(s)</div></div></div>
         <div class="stat-card"><div class="icon blue"><i class="fas fa-calendar-alt"></i></div><div><div class="num"><?= count($reservations) ?></div><div class="lbl">Réservation(s)</div></div></div>
@@ -292,106 +231,216 @@ if (session_status() === PHP_SESSION_NONE) session_start();
         <div class="stat-card"><div class="icon gold"><i class="fas fa-hourglass-half"></i></div><div><div class="num"><?= $stats['en_attente'] ?></div><div class="lbl">En attente</div></div></div>
     </div>
 
-    <!-- Tabs -->
+    <?php if ($mode === 'liste'): ?>
+    <!-- ════════════════════════════════════════
+         MODE LISTE
+    ════════════════════════════════════════ -->
+
     <div class="tabs">
-        <button class="tab-btn active" onclick="switchTab('vehicules')"><i class="fas fa-car"></i> Véhicules <span class="count">(<?= count($vehicules) ?>)</span></button>
-        <button class="tab-btn" onclick="switchTab('reservations')"><i class="fas fa-calendar-check"></i> Réservations <span class="count">(<?= count($reservations) ?>)</span></button>
+        <button class="tab-btn active" onclick="switchTab('vehicules',this)"><i class="fas fa-car"></i> Véhicules (<?= count($vehicules) ?>)</button>
+        <button class="tab-btn" onclick="switchTab('reservations',this)"><i class="fas fa-calendar-check"></i> Réservations (<?= count($reservations) ?>)</button>
     </div>
 
     <!-- Tab Véhicules -->
     <div id="tab-vehicules" class="tab-content active">
         <?php if (empty($vehicules)): ?>
-            <div class="table-wrap"><div class="empty-state" style="text-align:center;padding:2rem;"><i class="fas fa-car-side"></i><p>Aucun véhicule enregistré.</p></div></div>
+            <div class="table-wrap"><div style="text-align:center;padding:2rem;color:#8899AA;">Aucun véhicule</div></div>
         <?php else: ?>
-            <div class="table-wrap">
-                <div class="table-top"><h3><i class="fas fa-car"></i> Mes véhicules</h3><span class="count-badge"><?= count($vehicules) ?> véhicule(s)</span></div>
-                <table>
-                    <thead><tr><th>#</th><th>Marque / Modèle</th><th>Immatriculation</th><th>Places</th><th>Clim</th><th>Couleur</th><th>Statut</th></tr></thead>
-                    <tbody>
-                        <?php foreach ($vehicules as $v): ?>
-                        <tr>
-                            <td><?= $v['id'] ?></td>
-                            <td><strong><?= htmlspecialchars($v['marque']) ?></strong> <?= htmlspecialchars($v['modele']) ?></td>
-                            <td><code><?= htmlspecialchars($v['immatriculation']) ?></code></td>
-                            <td><?= $v['capacite'] ?></td>
-                            <td><?= $v['climatisation'] ? '<i class="fas fa-snowflake" style="color:#61B3FA;"></i>' : '<i class="fas fa-sun" style="color:#f1c40f;"></i>' ?></td>
-                            <td><?= htmlspecialchars($v['couleur'] ?? '—') ?></td>
-                            <td><span class="badge badge-<?= $v['statut'] ?>"><?= $v['statut'] === 'disponible' ? '✅ Disponible' : ($v['statut'] === 'indisponible' ? '❌ Indisponible' : '🔧 Maintenance') ?></span></td>
-                        </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
+        <div class="table-wrap">
+            <div class="table-top"><h3>Mes véhicules</h3></div>
+            <table>
+                <thead>
+                    <tr><th>#</th><th>Marque / Modèle</th><th>Immatriculation</th><th>Places</th><th>Statut</th><th>Action</th></tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($vehicules as $v): ?>
+                    <tr>
+                        <td><?= $v['id'] ?></td>
+                        <td><strong><?= htmlspecialchars($v['marque']) ?></strong> <?= htmlspecialchars($v['modele']) ?></td>
+                        <td><code><?= htmlspecialchars($v['immatriculation']) ?></code></td>
+                        <td><?= $v['capacite'] ?> pl.</td>
+                        <td><span class="badge badge-<?= $v['statut'] ?>"><?= $v['statut'] === 'disponible' ? 'Disponible' : ($v['statut'] === 'indisponible' ? 'Indisponible' : 'Maintenance') ?></span></td>
+                        <td>
+                            <a class="btn-detail" href="<?= $baseUrl ?>?mode=vehicule&id=<?= $v['id'] ?>" title="Détails">
+                                <i class="fas fa-eye"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
         <?php endif; ?>
     </div>
 
     <!-- Tab Réservations -->
     <div id="tab-reservations" class="tab-content">
         <?php if (empty($reservations)): ?>
-            <div class="table-wrap"><div class="empty-state" style="text-align:center;padding:2rem;"><i class="fas fa-calendar-times"></i><p>Aucune réservation.</p></div></div>
+            <div class="table-wrap"><div style="text-align:center;padding:2rem;color:#8899AA;">Aucune réservation</div></div>
         <?php else: ?>
-            <div class="table-wrap">
-                <div class="table-top"><h3><i class="fas fa-calendar-check"></i> Mes réservations</h3><span class="count-badge"><?= count($reservations) ?> réservation(s)</span></div>
-                <table>
-                    <thead><tr><th>#</th><th>Rôle</th><th>Véhicule</th><th>Immatriculation</th><th>Date</th><th>Statut</th></tr></thead>
-                    <tbody>
-                        <?php foreach ($reservations as $r):
-                            $role = (isset($r['vehicule_owner_id']) && $r['vehicule_owner_id'] == $userId) ? 'conducteur' : 'passager';
-                        ?>
-                        <tr>
-                            <td><?= $r['id'] ?></td>
-                            <td><span class="badge" style="background:<?= $role === 'conducteur' ? 'rgba(97,179,250,0.15)' : 'rgba(155,89,182,0.15)'; ?>;color:<?= $role === 'conducteur' ? '#61B3FA' : '#9b59b6'; ?>"><i class="fas fa-<?= $role === 'conducteur' ? 'steering-wheel' : 'user'; ?>"></i> <?= ucfirst($role) ?></span></td>
-                            <td><strong><?= htmlspecialchars($r['marque'] ?? '—') ?></strong> <?= htmlspecialchars($r['modele'] ?? '') ?></td>
-                            <td><code><?= htmlspecialchars($r['immatriculation'] ?? '—') ?></code></td>
-                            <td><?= date('d/m/Y', strtotime($r['date_reservation'])) ?></td>
-                            <td><span class="badge badge-<?= $r['statut'] ?>"><?= $r['statut'] === 'confirmee' ? '✅ Confirmée' : ($r['statut'] === 'annulee' ? '❌ Annulée' : '⏳ En attente') ?></span></td>
-                        </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
+        <div class="table-wrap">
+            <div class="table-top"><h3>Mes réservations</h3></div>
+            <table>
+                <thead>
+                    <tr><th>#</th><th>Véhicule</th><th>Immatriculation</th><th>Date</th><th>Statut</th><th>Action</th></tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($reservations as $r): ?>
+                    <tr>
+                        <td>#<?= $r['id'] ?></td>
+                        <td><strong><?= htmlspecialchars($r['marque'] ?? '—') ?></strong> <?= htmlspecialchars($r['modele'] ?? '') ?></td>
+                        <td><code><?= htmlspecialchars($r['immatriculation'] ?? '—') ?></code></td>
+                        <td><?= date('d/m/Y', strtotime($r['date_reservation'])) ?></td>
+                        <td><span class="badge badge-<?= $r['statut'] ?>"><?= $r['statut'] === 'confirmee' ? 'Confirmée' : ($r['statut'] === 'annulee' ? 'Annulée' : 'En attente') ?></span></td>
+                        <td>
+                            <a class="btn-detail" href="<?= $baseUrl ?>?mode=reservation&id=<?= $r['id'] ?>" title="Détails">
+                                <i class="fas fa-eye"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
         <?php endif; ?>
     </div>
-</div>
 
-<script>
-function toggleDropdown() { document.getElementById("dropdownMenu").classList.toggle("show"); }
-window.onclick = function(event) {
-    if (!event.target.matches('.dropdown-btn')) {
-        var dropdowns = document.getElementsByClassName("dropdown-content");
-        for (var i = 0; i < dropdowns.length; i++) {
-            if (dropdowns[i].classList.contains('show')) dropdowns[i].classList.remove('show');
-        }
+    <script>
+    function switchTab(tab, btn) {
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById('tab-' + tab).classList.add('active');
+        btn.classList.add('active');
     }
-}
+    </script>
 
-function switchTab(tab) {
-    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.getElementById(`tab-${tab}`).classList.add('active');
-    event.target.classList.add('active');
-}
+    <?php elseif ($mode === 'vehicule'): ?>
+    <!-- ════════════════════════════════════════
+         MODE DETAIL VEHICULE - SANS BOUTON MODIFIER
+    ════════════════════════════════════════ -->
 
-function showToast(message, type) {
-    const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    toast.innerHTML = `<i class="fas fa-info-circle"></i> ${message}`;
-    document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 3000);
-}
+    <a class="back-btn" href="<?= $baseUrl ?>">
+        <i class="fas fa-arrow-left"></i> Retour à l'historique
+    </a>
 
-const themeToggle = document.getElementById('themeToggle');
-if (localStorage.getItem('theme') === 'light') {
-    document.body.classList.add('light-mode');
-    themeToggle.innerHTML = '<i class="fas fa-sun"></i>';
-}
-themeToggle.addEventListener('click', () => {
-    document.body.classList.toggle('light-mode');
-    const isLight = document.body.classList.contains('light-mode');
-    localStorage.setItem('theme', isLight ? 'light' : 'dark');
-    themeToggle.innerHTML = isLight ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
-    showToast(isLight ? 'Mode clair activé' : 'Mode sombre activé', 'info');
-});
-</script>
+    <?php if (!$detailVehicule): ?>
+        <div class="alert-notfound"><i class="fas fa-exclamation-circle fa-2x"></i><br><br>Véhicule introuvable.</div>
+    <?php else: ?>
+
+    <?php
+    $couleurMap = ['rouge'=>'#e74c3c','bleu'=>'#1976D2','vert'=>'#27ae60','noir'=>'#1a1a2e','blanc'=>'#ecf0f1','gris'=>'#7f8c8d','jaune'=>'#f1c40f','orange'=>'#e67e22','violet'=>'#9b59b6','marron'=>'#795548','rose'=>'#e91e63'];
+    $couleurHex = $couleurMap[strtolower($detailVehicule['couleur'] ?? '')] ?? '#61B3FA';
+    $statutLabels = ['disponible'=>'✅ Disponible','indisponible'=>'❌ Indisponible','en_maintenance'=>'🔧 En maintenance'];
+    ?>
+
+    <div class="detail-page">
+
+        <!-- Infos générales - SANS BOUTON MODIFIER -->
+        <div class="detail-card">
+            <div class="dc-header">
+                <div class="icon-circle"><i class="fas fa-car"></i></div>
+                <h3>Informations générales</h3>
+            </div>
+            <div class="dc-row"><span class="dc-lbl">Marque</span><span class="dc-val"><?= htmlspecialchars($detailVehicule['marque']) ?></span></div>
+            <div class="dc-row"><span class="dc-lbl">Modèle</span><span class="dc-val"><?= htmlspecialchars($detailVehicule['modele']) ?></span></div>
+            <div class="dc-row"><span class="dc-lbl">Immatriculation</span><span class="dc-val"><code><?= htmlspecialchars($detailVehicule['immatriculation']) ?></code></span></div>
+            <div class="dc-row"><span class="dc-lbl">Couleur</span><span class="dc-val"><span class="color-dot" style="background:<?= $couleurHex ?>"></span><?= htmlspecialchars($detailVehicule['couleur'] ?? 'Non spécifiée') ?></span></div>
+            <div class="dc-row"><span class="dc-lbl">Capacité</span><span class="dc-val"><i class="fas fa-users" style="color:#61B3FA"></i>&nbsp;<?= $detailVehicule['capacite'] ?> places</span></div>
+            <div class="dc-row"><span class="dc-lbl">Climatisation</span><span class="dc-val"><?= ($detailVehicule['climatisation'] ?? 0) ? '✅ Oui' : '❌ Non' ?></span></div>
+            <div class="dc-row"><span class="dc-lbl">Statut</span><span class="dc-val"><?= $statutLabels[$detailVehicule['statut']] ?? htmlspecialchars($detailVehicule['statut']) ?></span></div>
+            <?php if (!empty($detailVehicule['description'])): ?>
+            <div class="dc-row"><span class="dc-lbl">Description</span><span class="dc-val" style="font-weight:400;font-size:0.83rem;color:#ccc"><?= htmlspecialchars($detailVehicule['description']) ?></span></div>
+            <?php endif; ?>
+            <!-- SUPPRESSION DU BOUTON MODIFIER -->
+        </div>
+
+        <!-- Réservations liées -->
+        <div class="detail-card">
+            <div class="dc-header">
+                <div class="icon-circle"><i class="fas fa-calendar-alt"></i></div>
+                <h3>Réservations liées (<?= count($linkedResas) ?>)</h3>
+            </div>
+            <?php if (empty($linkedResas)): ?>
+                <div style="padding:2rem;text-align:center;color:#8899AA;">Aucune réservation pour ce véhicule.</div>
+            <?php else: ?>
+                <?php foreach ($linkedResas as $lr): ?>
+                <a class="resa-link-item" href="<?= $baseUrl ?>?mode=reservation&id=<?= $lr['id'] ?>">
+                    <span>
+                        <strong>#<?= $lr['id'] ?></strong>
+                        &nbsp;<span style="color:#8899AA;font-size:0.82rem"><?= date('d/m/Y', strtotime($lr['date_reservation'])) ?></span>
+                    </span>
+                    <span>
+                        <span class="badge badge-<?= $lr['statut'] ?>"><?= $lr['statut'] === 'confirmee' ? 'Confirmée' : ($lr['statut'] === 'annulee' ? 'Annulée' : 'En attente') ?></span>
+                        &nbsp;<i class="fas fa-chevron-right" style="color:#61B3FA;font-size:0.7rem"></i>
+                    </span>
+                </a>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </div>
+
+    </div>
+    <?php endif; ?>
+
+    <?php elseif ($mode === 'reservation'): ?>
+    <!-- ════════════════════════════════════════
+         MODE DETAIL RESERVATION - SANS BOUTONS D'ACTION
+    ════════════════════════════════════════ -->
+
+    <a class="back-btn" href="<?= $baseUrl ?>">
+        <i class="fas fa-arrow-left"></i> Retour à l'historique
+    </a>
+
+    <?php if (!$detailReservation): ?>
+        <div class="alert-notfound"><i class="fas fa-exclamation-circle fa-2x"></i><br><br>Réservation introuvable.</div>
+    <?php else: ?>
+
+    <?php
+    $statutLabel = ['confirmee'=>'✅ Confirmée','annulee'=>'❌ Annulée','en_attente'=>'⏳ En attente'];
+    $couleurMap  = ['rouge'=>'#e74c3c','bleu'=>'#1976D2','vert'=>'#27ae60','noir'=>'#1a1a2e','blanc'=>'#ecf0f1','gris'=>'#7f8c8d','jaune'=>'#f1c40f','orange'=>'#e67e22','violet'=>'#9b59b6','marron'=>'#795548','rose'=>'#e91e63'];
+    ?>
+
+    <div class="detail-page">
+
+        <!-- Infos réservation - SANS BOUTONS -->
+        <div class="detail-card">
+            <div class="dc-header">
+                <div class="icon-circle"><i class="fas fa-calendar-check"></i></div>
+                <h3>Réservation #<?= $detailReservation['id'] ?></h3>
+            </div>
+            <div class="dc-row"><span class="dc-lbl">Date</span><span class="dc-val"><i class="fas fa-calendar" style="color:#61B3FA"></i>&nbsp;<?= date('d F Y', strtotime($detailReservation['date_reservation'])) ?></span></div>
+            <div class="dc-row"><span class="dc-lbl">Statut</span><span class="dc-val"><?= $statutLabel[$detailReservation['statut']] ?? htmlspecialchars($detailReservation['statut']) ?></span></div>
+            <?php if (!empty($detailReservation['trajet_id'])): ?>
+            <div class="dc-row"><span class="dc-lbl">Trajet lié</span><span class="dc-val"><i class="fas fa-route" style="color:#61B3FA"></i>&nbsp;#<?= $detailReservation['trajet_id'] ?></span></div>
+            <?php endif; ?>
+            <?php if (!empty($detailReservation['note'])): ?>
+            <div class="dc-row"><span class="dc-lbl">Note</span><span class="dc-val" style="font-weight:400;color:#ccc"><?= htmlspecialchars($detailReservation['note']) ?></span></div>
+            <?php endif; ?>
+            <!-- SUPPRESSION DES BOUTONS Annuler/Supprimer/Modifier -->
+        </div>
+
+        <!-- Véhicule concerné -->
+        <div class="detail-card">
+            <div class="dc-header">
+                <div class="icon-circle"><i class="fas fa-car"></i></div>
+                <h3>Véhicule concerné</h3>
+            </div>
+            <?php if (!$detailVehicule): ?>
+                <div style="padding:2rem;text-align:center;color:#8899AA;">Informations véhicule indisponibles.</div>
+            <?php else: ?>
+            <?php $couleurHex = $couleurMap[strtolower($detailVehicule['couleur'] ?? '')] ?? '#61B3FA'; ?>
+            <div class="dc-row"><span class="dc-lbl">Marque / Modèle</span><span class="dc-val"><strong><?= htmlspecialchars($detailVehicule['marque']) ?></strong>&nbsp;<?= htmlspecialchars($detailVehicule['modele']) ?></span></div>
+            <div class="dc-row"><span class="dc-lbl">Immatriculation</span><span class="dc-val"><code><?= htmlspecialchars($detailVehicule['immatriculation']) ?></code></span></div>
+            <div class="dc-row"><span class="dc-lbl">Couleur</span><span class="dc-val"><span class="color-dot" style="background:<?= $couleurHex ?>"></span><?= htmlspecialchars($detailVehicule['couleur'] ?? '—') ?></span></div>
+            <div class="dc-row"><span class="dc-lbl">Capacité</span><span class="dc-val"><i class="fas fa-users" style="color:#61B3FA"></i>&nbsp;<?= $detailVehicule['capacite'] ?> places</span></div>
+            <div class="dc-row"><span class="dc-lbl">Climatisation</span><span class="dc-val"><?= ($detailVehicule['climatisation'] ?? 0) ? '✅ Oui' : '❌ Non' ?></span></div>
+            <?php endif; ?>
+        </div>
+
+    </div>
+
+    <?php endif; ?>
+    <?php endif; /* fin mode */ ?>
+
+</div><!-- /.container -->
 </body>
 </html>

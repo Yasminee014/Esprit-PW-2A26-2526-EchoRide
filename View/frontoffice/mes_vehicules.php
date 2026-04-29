@@ -37,6 +37,16 @@ elseif ($action === 'edit' && $editId > 0) {
         exit;
     }
 } 
+elseif ($action === 'details' && $editId > 0) {
+    // 🚗 PAGE DÉTAILS COMPLÈTE AVEC HEADER MODERNE
+    $vehicule = $vehiculeModel->getById($editId);
+    if ($vehicule && $vehicule['user_id'] == ($_SESSION['user_id'] ?? 0)) {
+        require __DIR__ . '/mes_vehicules_details.php';
+    } else {
+        header('Location: mes_vehicules.php');
+        exit;
+    }
+}
 else {
     // Afficher la liste des véhicules
     $controller->mesVehicules();

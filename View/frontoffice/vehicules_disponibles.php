@@ -1,13 +1,11 @@
 <?php
 if (session_status() === PHP_SESSION_NONE) session_start();
 
-require_once __DIR__ . '/../../Controller/ReservationController.php';
-$controller = new ReservationController();
+require_once __DIR__ . '/../../Config/Database.php';
+require_once __DIR__ . '/../../Model/VehiculeModel.php';
 
-$action = $_POST['action'] ?? '';
-if ($action === 'reserver') {
-    $controller->foCreate();
-} else {
-    $controller->vehiculesDisponibles();
-}
+$vehiculeModel = new VehiculeModel();
+$vehicules = $vehiculeModel->getDisponibles();
+
+require __DIR__ . '/vehicules_disponibles_view.php';
 ?>
