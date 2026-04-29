@@ -16,11 +16,14 @@ final class LostFoundAdminController
         return $this->repository->findAll();
     }
 
+<<<<<<< HEAD
     public function deleteDeclaration(int $id): bool
     {
         return $this->repository->delete($id);
     }
 
+=======
+>>>>>>> 81d128fc8400e414fe2cb0357fd2e7abb77abf72
     public function create(array $input): array
     {
         $errors = $this->validateCreatePayload($input);
@@ -60,6 +63,7 @@ final class LostFoundAdminController
         return ['ok' => $this->repository->updateStatus($id, $status)];
     }
 
+<<<<<<< HEAD
     public function addComment(int $declarationId, ?int $conducteurId, string $message): int
     {
         return $this->repository->addComment($declarationId, $conducteurId, null, $message, null);
@@ -75,6 +79,8 @@ final class LostFoundAdminController
         return $this->repository->findAllComments();
     }
 
+=======
+>>>>>>> 81d128fc8400e414fe2cb0357fd2e7abb77abf72
     private function validateCreatePayload(array $input): array
     {
         $errors = [];

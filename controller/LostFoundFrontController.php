@@ -5,8 +5,11 @@ require_once __DIR__ . '/../modele/LostFoundFrontRepository.php';
 
 final class LostFoundFrontController
 {
+<<<<<<< HEAD
     private const NOTIFICATION_EMAIL = 'abdelmalakgafsi@gmail.com';
 
+=======
+>>>>>>> 81d128fc8400e414fe2cb0357fd2e7abb77abf72
     public function __construct(private readonly LostFoundFrontRepository $repository)
     {
     }
@@ -16,6 +19,7 @@ final class LostFoundFrontController
         return $this->repository->findPublished();
     }
 
+<<<<<<< HEAD
     public function create(array $input): array
     {
         $payload = [
@@ -39,6 +43,8 @@ final class LostFoundFrontController
         return ['ok' => true, 'id' => $id, 'mail_sent' => $mailSent];
     }
 
+=======
+>>>>>>> 81d128fc8400e414fe2cb0357fd2e7abb77abf72
     public function listByPassenger(int $passagerId): array
     {
         if ($passagerId <= 0) {
@@ -47,6 +53,7 @@ final class LostFoundFrontController
 
         return $this->repository->findByPassenger($passagerId);
     }
+<<<<<<< HEAD
 
     public function addComment(int $declarationId, ?int $conducteurId, string $message): int
     {
@@ -153,4 +160,6 @@ final class LostFoundFrontController
             . "Statut: $statut\n\n"
             . "Message genere automatiquement par le module front.";
     }
+=======
+>>>>>>> 81d128fc8400e414fe2cb0357fd2e7abb77abf72
 }

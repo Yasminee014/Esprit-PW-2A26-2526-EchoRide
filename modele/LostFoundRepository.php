@@ -75,6 +75,7 @@ final class LostFoundRepository
         return $stmt->fetchAll();
     }
 
+<<<<<<< HEAD
     public function findAllComments(): array
     {
         $stmt = $this->pdo->query('SELECT id, declaration_id, user_id, user_nom, message, parent_comment_id, created_at
@@ -84,6 +85,8 @@ final class LostFoundRepository
         return $stmt->fetchAll();
     }
 
+=======
+>>>>>>> 81d128fc8400e414fe2cb0357fd2e7abb77abf72
     public function addComment(
         int $declarationId,
         ?int $userId,

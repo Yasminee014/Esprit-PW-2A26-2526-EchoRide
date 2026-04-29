@@ -33,6 +33,7 @@ final class LostFoundFrontRepository
         return $stmt->fetchAll();
     }
 
+<<<<<<< HEAD
     public function findById(int $id): ?array
     {
         $sql = 'SELECT id, titre, description, categorie, lieu_perte, photo_url, date_perte, statut, trajet_id, passager_id, anonyme_nom
@@ -47,6 +48,8 @@ final class LostFoundFrontRepository
         return $row !== false ? $row : null;
     }
 
+=======
+>>>>>>> 81d128fc8400e414fe2cb0357fd2e7abb77abf72
     public function create(array $data): int
     {
         $sql = 'INSERT INTO declarations (titre, description, categorie, lieu_perte, photo_url, date_perte, statut, trajet_id, passager_id, anonyme_nom, user_id, user_nom)
@@ -71,6 +74,7 @@ final class LostFoundFrontRepository
         return (int) $this->pdo->lastInsertId();
     }
 
+<<<<<<< HEAD
     public function update(array $data): bool
     {
         $sql = 'UPDATE declarations
@@ -100,6 +104,8 @@ final class LostFoundFrontRepository
         return $stmt->execute([':id' => $id]);
     }
 
+=======
+>>>>>>> 81d128fc8400e414fe2cb0357fd2e7abb77abf72
     public function findCommentsByDeclaration(int $declarationId): array
     {
         $sql = 'SELECT id, declaration_id, user_id, user_nom, message, parent_comment_id, created_at
@@ -113,6 +119,7 @@ final class LostFoundFrontRepository
         return $stmt->fetchAll();
     }
 
+<<<<<<< HEAD
     public function findAllComments(): array
     {
         $stmt = $this->pdo->query('SELECT id, declaration_id, user_id, user_nom, message, parent_comment_id, created_at
@@ -122,6 +129,8 @@ final class LostFoundFrontRepository
         return $stmt->fetchAll();
     }
 
+=======
+>>>>>>> 81d128fc8400e414fe2cb0357fd2e7abb77abf72
     public function addComment(
         int $declarationId,
         ?int $userId,
