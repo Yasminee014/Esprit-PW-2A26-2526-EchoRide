@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Administration - Objets perdus - EcoRide</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+ <link rel="stylesheet" href="../assets/css/lostfound_admin.css">
+</head>
+<body>
+<div class="wrap">
+  <aside class="sidebar">
+    <div class="logo">
+      <i class="fas fa-leaf"></i>
+      <h2>EcoRide</h2>
+      <p>Administration</p>
+    </div>
+    <nav>
+      <div class="nav-section">Gestion</div>
+      <ul>
+        <li><a href="#"><i class="fas fa-user"></i> User</a></li>
+        <li><a href="#"><i class="fas fa-route"></i> Trajets</a></li>
+        <li><a href="#"><i class="fas fa-calendar-days"></i> Evenement</a></li>
+        <li><a href="#" class="active"><i class="fas fa-box-open"></i> Objet_perdu</a></li>
+        <li><a href="#"><i class="fas fa-comment-dots"></i> Reclamation</a></li>
+      </ul>
+      <hr class="sidebar-sep">
+      <ul>
+        <li><a href="#"><i class="fas fa-sign-out-alt"></i> Deconnexion</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <h1><i class="fas fa-box-open"></i> Gestion des objets perdus</h1>
+      <a href="../Front%20office/lostfound_front.html" class="pill-user"><i class="fas fa-user"></i> Espace utilisateur</a>
+      <button type="button" class="pill-user" id="openDeclarantsManagerBtn"><i class="fas fa-users"></i> Declarants non inscrits</button>
+      <span class="pill"><i class="fas fa-shield-alt"></i></span>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><i class="fas fa-inbox"></i><div class="num" id="statTotal">0</div><div class="lbl">Total declarations</div></div>
+      <div class="stat"><i class="fas fa-triangle-exclamation"></i><div class="num" id="statPerdu">0</div><div class="lbl">Objets perdus</div></div>
+      <div class="stat"><i class="fas fa-magnifying-glass-location"></i><div class="num" id="statRetrouve">0</div><div class="lbl">Objets retrouves</div></div>
+      <div class="stat"><i class="fas fa-handshake"></i><div class="num" id="statRestitue">0</div><div class="lbl">Objets restitues</div></div>
+    </div>
+
+    <div class="toolbar">
+      <div class="search-box">
+        <i class="fas fa-search"></i>
+        <input type="text" id="searchInput" placeholder="Rechercher declaration, objet, declarant...">
+      </div>
+    </div>
+
+    <div class="filters">
+      <select id="filterStatut" class="st-sel">
+        <option value="tous">Statut : Tous</option>
+        <option value="perdu">Perdu</option>
+        <option value="retrouve">Retrouve</option>
+        <option value="restitue">Restitue</option>
+      </select>
+      <select id="filterCategorie" class="st-sel">
+        <option value="toutes">Categorie : Toutes</option>
+        <option value="electronique">Electronique</option>
+        <option value="vetement">Vetement</option>
+        <option value="document">Document</option>
+        <option value="bagage">Bagage</option>
+        <option value="autre">Autre</option>
+      </select>
+      <select id="filterDeclarant" class="st-sel">
+        <option value="tous">Declarant : Tous</option>
+        <option value="inscrit">Inscrit</option>
+        <option value="anonyme">Anonyme</option>
+      </select>
+    </div>
+
+    <div class="tbl-wrap">
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Declarant</th>
+              <th>Trajet</th>
+              <th>Categorie</th>
+              <th>Description</th>
+              <th>Statut</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="declarationsTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="overlay" id="detailModal">
+  <div class="modal">
+    <h2><i class="fas fa-circle-info"></i> Details de la declaration</h2>
+    <form id="detailForm">
+      <div class="fgrid">
+        <div class="fg">
+          <label for="detailId">ID</label>
+          <input id="detailId" type="text" readonly>
+        </div>
+        <div class="fg">
+          <label for="detailTrajet">Trajet ID</label>
+          <input id="detailTrajet" type="text" inputmode="numeric">
+        </div>
+      </div>
+      <div class="fgrid">
+        <div class="fg">
+          <label for="detailCategorie">Categorie</label>
+          <select id="detailCategorie">
+            <option value="electronique">Electronique</option>
+            <option value="vetement">Vetement</option>
+            <option value="document">Document</option>
+            <option value="bagage">Bagage</option>
+            <option value="autre">Autre</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label for="detailStatut">Statut</label>
+          <select id="detailStatut">
+            <option value="perdu">Perdu</option>
+            <option value="retrouve">Retrouve</option>
+            <option value="restitue">Restitue</option>
+          </select>
+        </div>
+      </div>
+      <div class="fg">
+        <label for="detailDescription">Description</label>
+        <textarea id="detailDescription"></textarea>
+      </div>
+
+      <div class="section">
+        <h3><i class="fas fa-comments"></i> Commentaires</h3>
+        <div class="comment-list" id="commentsList"></div>
+        <div class="fgrid" style="margin-top:.7rem;">
+          <div class="fg">
+            <label for="commentConducteurId">Conducteur ID</label>
+            <input id="commentConducteurId" type="text" inputmode="numeric" placeholder="Ex: 31">
+          </div>
+          <div class="fg">
+            <label for="commentMessage">Nouveau commentaire</label>
+            <input id="commentMessage" type="text" placeholder="Ex: Sac retrouve cote conducteur">
+          </div>
+        </div>
+        <button type="button" class="btn btn-outline" id="addCommentBtn"><i class="fas fa-plus"></i> Ajouter commentaire</button>
+      </div>
+
+      <div class="section">
+        <h3><i class="fas fa-robot"></i> IA commentaires</h3>
+        <div class="ia-box" id="iaSuggestion">Aucun commentaire pour le moment.</div>
+      </div>
+
+      <div class="mfooter">
+        <button type="button" class="btn btn-outline" data-close="detailModal">Fermer</button>
+        <button type="button" class="btn btn-warning" id="markRestitueBtn"><i class="fas fa-handshake"></i> Restituer</button>
+        <button type="button" class="btn btn-danger" id="deleteFromModalBtn"><i class="fas fa-trash"></i> Supprimer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="overlay" id="declarantCreateModal">
+  <div class="modal">
+    <h2><i class="fas fa-user-plus"></i> Nouveau declarant non inscrit</h2>
+    <form id="declarantCreateForm" novalidate>
+      <div id="declarantCreateError" class="form-error" aria-live="polite"></div>
+      <div class="fg">
+        <label for="declarantName">Nom complet</label>
+        <input id="declarantName" type="text" placeholder="Ex: Nadia Benali">
+        <div id="declarantNameError" class="field-error" aria-live="polite"></div>
+      </div>
+      <div class="form-note">Ce declarant sera disponible dans la liste des non inscrits.</div>
+      <div class="mfooter">
+        <button type="button" class="btn btn-outline" data-close="declarantCreateModal">Annuler</button>
+        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Ajouter</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="overlay" id="declarantsListModal">
+  <div class="modal">
+    <h2><i class="fas fa-list"></i> Declarants non inscrits</h2>
+    <div class="section" style="margin-top:0;padding-top:0;border-top:none;">
+      <div class="comment-meta" id="declarantsCount">0 declarant</div>
+      <div class="comment-list" id="declarantsList"></div>
+    </div>
+    <div class="mfooter">
+      <button type="button" class="btn btn-primary" id="openNewDeclarantFromListBtn"><i class="fas fa-user-plus"></i> Nouveau declarant</button>
+      <button type="button" class="btn btn-outline" data-close="declarantsListModal">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<script src="../assets/js/lostfound_admin_html.js"></script>
+</body>
+</html>
+
+
