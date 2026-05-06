@@ -139,5 +139,59 @@ public function countAllAdmin($search = '') {
     $stmt->execute($params);
     return $stmt->fetch()['total'];
 }
+// Récupérer tous les sponsors avec pagination (pour le FrontOffice)
+public function getAllWithPagination($search = '', $sort = 'nom_entreprise', $order = 'ASC', $page = 1, $limit = 3) {
+    $offset = ($page - 1) * $limit;
+    $sql = "SELECT s.*, e.titre as event_titre 
+            FROM sponsors s 
+            LEFT JOIN evenements e ON s.evenement_id = e.id 
+            WHERE 1=1";
+    $params = [];
+    
+    if(!empty($search)) {
+        $sql .= " AND (s.nom_entreprise LIKE ? OR s.type_sponsor LIKE ?)";
+        $searchTerm = "%$search%";
+        $params = [$searchTerm, $searchTerm];
+    }
+    
+    $allowedSort = ['nom_entreprise', 'montant_sponsoring', 'type_sponsor', 'statut'];
+    $sortColumn = in_array($sort, $allowedSort) ? "s.$sort" : 's.nom_entreprise';
+    $orderDirection = strtoupper($order) === 'DESC' ? 'DESC' : 'ASC';
+    $sql .= " ORDER BY $sortColumn $orderDirection";
+    $sql .= " LIMIT " . (int)$limit . " OFFSET " . (int)$offset;
+    
+    $stmt = $this->db->prepare($sql);
+    $stmt->execute($params);
+    return $stmt->fetchAll();
+}
+
+// Compter le nombre total de sponsors pour la pagination
+public function countAllWithPagination($search = '') {
+    $sql = "SELECT COUNT(*) as total FROM sponsors s WHERE 1=1";
+    $params = [];
+    
+    if(!empty($search)) {
+        $sql .= " AND (s.nom_entreprise LIKE ? OR s.type_sponsor LIKE ?)";
+        $searchTerm = "%$search%";
+        $params = [$searchTerm, $searchTerm];
+    }
+    
+    $stmt = $this->db->prepare($sql);
+    $stmt->execute($params);
+    return $stmt->fetch()['total'];
+}
+// Récupérer les sponsors d'un événement spécifique
+public function getByEventId($eventId) {
+    $stmt = $this->db->prepare("SELECT * FROM sponsors WHERE evenement_id = ?");
+    $stmt->execute([$eventId]);
+    return $stmt->fetchAll();
+}
+// Récupérer l'événement associé à un sponsor
+public function getEventsBySponsorId($sponsorId) {
+    $stmt = $this->db->prepare("SELECT e.* FROM evenements e JOIN sponsors s ON s.evenement_id = e.id WHERE s.id = ?");
+    $stmt->execute([$sponsorId]);
+    $event = $stmt->fetch();
+    return $event ? [$event] : [];
+}
 }
 ?>

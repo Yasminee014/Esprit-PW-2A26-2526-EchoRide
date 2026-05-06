@@ -238,7 +238,7 @@ document.getElementById('btnGenerateIA').addEventListener('click', async functio
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Génération en cours...';
     
     try {
-        const response = await fetch('../../../Controller/api_generate_description.php', {
+        const response = await fetch('../../../controllers/api_generate_description.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 

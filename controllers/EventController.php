@@ -1,6 +1,6 @@
 <?php
-// Controller/EventController.php
-namespace Controller;
+// controllers/EventController.php
+namespace Controllers;
 
 use Model\Event;
 use Model\Sponsor;
@@ -21,13 +21,13 @@ class EventController {
     public function accueil() {
         $upcomingEvents = $this->eventModel->getUpcoming();
         $sponsors = $this->sponsorModel->getActive();
-        require_once __DIR__ . '/../View/FrontOffice/accueil.php';
+        require_once __DIR__ . '/../views/frontoffice/accueil.php';
     }
     
     // Liste publique des événements
     public function publicEvents() {
         $events = $this->eventModel->getAll();
-        require_once __DIR__ . '/../View/FrontOffice/events.php';
+        require_once __DIR__ . '/../views/frontoffice/events.php';
     }
     
     // Détail d'un événement
@@ -43,7 +43,7 @@ class EventController {
             exit();
         }
         
-        require_once __DIR__ . '/../View/FrontOffice/event-detail.php';
+        require_once __DIR__ . '/../views/frontoffice/event-detail.php';
     }
     
     // ========== BACKOFFICE ==========
@@ -56,13 +56,13 @@ class EventController {
         $totalSponsoring = $this->sponsorModel->getTotalMontant();
         $recentEvents = $this->eventModel->getUpcoming();
         
-        require_once __DIR__ . '/../View/BackOffice/dashboard.php';
+        require_once __DIR__ . '/../views/backoffice/dashboard.php';
     }
     
     // Liste des événements (CRUD)
     public function index() {
         $events = $this->eventModel->getAll();
-        require_once __DIR__ . '/../View/BackOffice/events/list.php';
+        require_once __DIR__ . '/../views/backoffice/events/list.php';
     }
     
     // Ajouter un événement
@@ -78,7 +78,7 @@ class EventController {
             }
         }
         $event = null;
-        require_once __DIR__ . '/../View/BackOffice/events/form.php';
+        require_once __DIR__ . '/../views/backoffice/events/form.php';
     }
     
     // Modifier un événement
@@ -100,7 +100,7 @@ class EventController {
         }
         
         $event = $this->eventModel->getById($id);
-        require_once __DIR__ . '/../View/BackOffice/events/form.php';
+        require_once __DIR__ . '/../views/backoffice/events/form.php';
     }
     
     // Supprimer un événement

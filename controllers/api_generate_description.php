@@ -1,5 +1,5 @@
 <?php
-// Controller/api_generate_description.php
+// controllers/api_generate_description.php
 header('Content-Type: application/json');
 
 // 🔑 METTEZ VOTRE CLÉ API ICI (copiez-collez)

@@ -195,5 +195,43 @@ class Event {
         $stmt->execute($params);
         return $stmt->fetch()['total'];
     }
+    // Récupérer tous les événements avec pagination (pour le FrontOffice)
+public function getAllWithPagination($search = '', $sort = 'date_evenement', $order = 'ASC', $page = 1, $limit = 6) {
+    $offset = ($page - 1) * $limit;
+    $sql = "SELECT * FROM evenements WHERE 1=1";
+    $params = [];
+    
+    if(!empty($search)) {
+        $sql .= " AND (titre LIKE ? OR ville LIKE ? OR type LIKE ?)";
+        $searchTerm = "%$search%";
+        $params = [$searchTerm, $searchTerm, $searchTerm];
+    }
+    
+    $allowedSort = ['titre', 'ville', 'date_evenement', 'nb_places', 'statut'];
+    $sortColumn = in_array($sort, $allowedSort) ? $sort : 'date_evenement';
+    $orderDirection = strtoupper($order) === 'DESC' ? 'DESC' : 'ASC';
+    $sql .= " ORDER BY $sortColumn $orderDirection";
+    $sql .= " LIMIT " . (int)$limit . " OFFSET " . (int)$offset;
+    
+    $stmt = $this->db->prepare($sql);
+    $stmt->execute($params);
+    return $stmt->fetchAll();
+}
+
+// Compter le nombre total d'événements pour la pagination
+public function countAllWithPagination($search = '') {
+    $sql = "SELECT COUNT(*) as total FROM evenements WHERE 1=1";
+    $params = [];
+    
+    if(!empty($search)) {
+        $sql .= " AND (titre LIKE ? OR ville LIKE ? OR type LIKE ?)";
+        $searchTerm = "%$search%";
+        $params = [$searchTerm, $searchTerm, $searchTerm];
+    }
+    
+    $stmt = $this->db->prepare($sql);
+    $stmt->execute($params);
+    return $stmt->fetch()['total'];
+}
 }
 ?>

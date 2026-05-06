@@ -1,6 +1,6 @@
 <?php
-// Controller/SponsorController.php
-namespace Controller;
+// controllers/SponsorController.php
+namespace Controllers;
 
 use Model\Sponsor;
 use Model\Event;
@@ -18,7 +18,7 @@ class SponsorController {
     // Liste des sponsors (CRUD)
     public function index() {
         $sponsors = $this->sponsorModel->getAll();
-        require_once __DIR__ . '/../View/BackOffice/sponsors/list.php';
+        require_once __DIR__ . '/../views/backoffice/sponsors/list.php';
     }
     
     // Ajouter un sponsor
@@ -36,7 +36,7 @@ class SponsorController {
             }
         }
         $sponsor = null;
-        require_once __DIR__ . '/../View/BackOffice/sponsors/form.php';
+        require_once __DIR__ . '/../views/backoffice/sponsors/form.php';
     }
     
     // Modifier un sponsor
@@ -60,7 +60,7 @@ class SponsorController {
         }
         
         $sponsor = $this->sponsorModel->getById($id);
-        require_once __DIR__ . '/../View/BackOffice/sponsors/form.php';
+        require_once __DIR__ . '/../views/backoffice/sponsors/form.php';
     }
     
     // Supprimer un sponsor
@@ -86,5 +86,11 @@ class SponsorController {
     public function getErrors() {
         return $this->errors;
     }
+    // Récupérer les sponsors d'un événement spécifique
+public function getByEventId($eventId) {
+    $stmt = $this->db->prepare("SELECT * FROM sponsors WHERE evenement_id = ? AND statut = 'confirme'");
+    $stmt->execute([$eventId]);
+    return $stmt->fetchAll();
+}
 }
 ?>
