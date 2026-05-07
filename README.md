@@ -86,7 +86,7 @@ The project was developed using an **MVC architecture** with advanced functional
 
 ---
 
-# 🛠️ Technologies Used
+## 🛠️ Technologies Used
 
 ## 🎨 Frontend
 - HTML5
