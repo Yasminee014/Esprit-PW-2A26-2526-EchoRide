@@ -117,49 +117,92 @@ This project follows the **MVC (Model - View - Controller)** architecture:
 - **Controller** → Connects models and views while handling application logic
 
 ---
-Installation
+# ⚙️ Installation
 
-1️⃣ Clone the repository
+## 1️⃣ Clone the repository
+
+```bash
 git clone https://github.com/Yasminee014/Esprit-PW-2A26-2526-EchoRide.git
+```
 
-2️⃣ Move the project into your local server directory
+---
+
+## 2️⃣ Move the project into your local server directory
+
 Example for XAMPP:
+
+```bash
 htdocs/ecoride
+```
 
-3️⃣ Import the database
-Import the SQL file into phpMyAdmin.
+---
 
-4️⃣ Configure database connection
-Edit:
+## 3️⃣ Import the database
+
+Import the SQL file into **phpMyAdmin**.
+
+---
+
+## 4️⃣ Configure database connection
+
+Edit the following file:
+
+```bash
 config/database.php
+```
 
-5️⃣ Start Apache & MySQL
+---
+
+## 5️⃣ Start Apache & MySQL
+
 Launch XAMPP or your local server.
 
-6️⃣ Run the project
+---
+
+## 6️⃣ Run the project
+
+```bash
 http://localhost/ecoride
+```
+
+---
 
 # 👥 Collaborators
 
 | Name | Module / Role | GitHub |
 |------|------|------|
-| [Abir Charcheri](https://github.com/abirch13) | User & Admin Module | @abirch13 |
-| [Yesmine Khsib](https://github.com/yesmine750) | Vehicles & Reservation | @yesmine750 |
-| [Yasmine Tabbane](https://github.com/Yasminee014) | Trips & Destinations | @Yasminee014 |
-| [Maram Bahri](https://github.com/maram-11667) | Events & Sponsors | @maram-11667 |
-| [Chahed Tellili](https://github.com/chahedtellili1) | Reclamation & Messaging | @chahedtellili1 |
-| [Abdelmalak Gafsi](https://github.com/abdelmalak-gafsi) | Lost & Found | @abdelmalak-gafsi |
+| Abir Charcheri | User & Admin Module | [@abirch13](https://github.com/abirch13) |
+| Yesmine Khsib | Vehicles & Reservation | [@yesmine750](https://github.com/yesmine750) |
+| Yasmine Tabbane | Trips & Destinations | [@Yasminee014](https://github.com/Yasminee014) |
+| Maram Bahri | Events & Sponsors | [@maram-11667](https://github.com/maram-11667) |
+| Chahed Tellili | Reclamation & Messaging | [@chahedtellili1](https://github.com/chahedtellili1) |
+| Abdelmalak Gafsi | Lost & Found | [@abdelmalak-gafsi](https://github.com/abdelmalak-gafsi) |
 
+---
 
-🔑 Test Accounts
-👨‍💼 Admin Account
+# 🔑 Test Accounts
+
+## 👨‍💼 Admin Account
+
+```txt
 Email: Admin@ecoride.fr
 Password: Admin123
+```
 
-👤 User Account
+---
+
+## 👤 User Account
+
+```txt
 Email: Charcheriabir18@gmail.com
 Password: 55555555B
+```
 
+---
 
-📜 License
+# 📜 License
+
 This project was developed for educational and academic purposes.
+
+
+
