@@ -100,8 +100,11 @@ The project was developed using an **MVC architecture** with advanced functional
 ## 🗄️ Database
 - MySQL
 
-## 🔧 APIs & Tools
+# 🔧 APIs & Tools
+
 - Google Maps API
+- Translation API
+- Online Payment API
 - Git & GitHub
 - phpMyAdmin
 - VS Code
