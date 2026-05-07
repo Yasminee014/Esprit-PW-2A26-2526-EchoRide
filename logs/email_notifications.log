@@ -1,0 +1,7 @@
+[2026-05-07 01:00:45] STATUS=FAILED | SUBJECT="Declaration supprimee" | RECIPIENT="admin@ecoride.local" | REASON="mail() function returned false"
+[2026-05-07 01:01:03] STATUS=FAILED | SUBJECT="Declaration supprimee" | RECIPIENT="admin@ecoride.local" | REASON="mail() function returned false"
+[2026-05-07 01:18:59] STATUS=FAILED | SUBJECT="Nouvelle declaration publiee" | RECIPIENT="abdelmalakgafsi@gmail.com" | REASON="mail() returned false"
+[2026-05-07 01:24:35] STATUS=FAILED | SUBJECT="Declaration supprimee" | RECIPIENT="abdelmalakgafsi@gmail.com" | REASON="mail() returned false"
+[2026-05-07 01:33:49] STATUS=SUCCESS | SUBJECT="Declaration supprimee" | RECIPIENT="abdelmalakgafsi@gmail.com" | REASON="Sent through SMTP"
+[2026-05-07 01:34:30] STATUS=SUCCESS | SUBJECT="Nouvelle declaration publiee" | RECIPIENT="abdelmalakgafsi@gmail.com" | REASON="Sent through SMTP"
+[2026-05-07 12:10:47] STATUS=SUCCESS | SUBJECT="Nouvelle declaration publiee" | RECIPIENT="abdelmalakgafsi@gmail.com" | REASON="Sent through SMTP"

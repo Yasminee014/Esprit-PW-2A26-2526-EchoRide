@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Objets perdus | EcoRide Front Office</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link rel="stylesheet" href="../assets/css/lostfound_front.css">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="nav-left">
+      <a href="#" class="logo"><i class="fas fa-leaf"></i><span>EcoRide</span></a>
+      <div class="dropdown">
+        <button class="dropdown-btn" id="menuBtn"><i class="fas fa-bars"></i><span>Menu</span></button>
+        <div class="dropdown-content" id="dropdownMenu">
+          <a href="#" class="active"><i class="fas fa-box-open"></i> Objets perdus</a>
+          <a href="#" id="openUsersTab"><i class="fas fa-users"></i> Changer utilisateur</a>
+          <a href="#" id="openNewDeclarantFrontBtn"><i class="fas fa-user-plus"></i> Nouveau declarant non inscrit</a>
+          <a href="#" id="openDeclarantsListFrontBtn"><i class="fas fa-list"></i> Liste declarants non inscrits</a>
+          <a href="#" id="openPublicationsImageBtn"><i class="fas fa-image"></i> Mes publications (image)</a>
+          <a href="#" id="quickThreadLink"><i class="fas fa-comments"></i> Derniers commentaires</a>
+          <div class="dropdown-divider"></div>
+          <a href="../Back%20office/lostfound_admin.html"><i class="fas fa-shield-alt"></i> Administration</a>
+        </div>
+      </div>
+    </div>
+    <div class="nav-right">
+      <button id="themeToggle" class="theme-btn" type="button"><i class="fas fa-moon"></i></button>
+      <div class="user-info"><i class="fas fa-user-circle"></i><span id="currentUserName">Sophie Martin</span></div>
+      <button id="signInBtn" class="auth-btn" type="button">Sign in</button>
+      <button id="signUpBtn" class="auth-btn auth-btn-primary" type="button">Sign up</button>
+    </div>
+  </nav>
+
+  <div class="container">
+    <section class="hero-section">
+      <div class="hero-content">
+        <h1><i class="fas fa-box-open"></i> Suivi des <span class="highlight">objets perdus</span></h1>
+        <p>Publiez, suivez les commentaires des conducteurs et trouvez rapidement votre objet grace aux mises a jour en temps reel.</p>
+        <div class="hero-stats">
+          <div class="stat"><div class="number" id="heroTotal">0</div><div class="label">Declarations</div></div>
+          <div class="stat"><div class="number" id="heroOpen">0</div><div class="label">A retrouver</div></div>
+          <div class="stat"><div class="number" id="heroResolved">0</div><div class="label">Resolues</div></div>
+        </div>
+        <button id="openPublishModalBtn" class="hero-btn" type="button">Nouvelle publication <i class="fas fa-plus"></i></button>
+      </div>
+      <div class="hero-icon"><i class="fas fa-magnifying-glass-location"></i></div>
+    </section>
+
+    <section class="filters-bar">
+      <div class="filter-group"><i class="fas fa-search"></i><input type="text" id="searchInput" placeholder="Rechercher titre, lieu, declarant..."></div>
+      <div class="filter-group"><i class="fas fa-layer-group"></i>
+        <select id="filterCategory">
+          <option value="">Toutes categories</option>
+          <option value="electronique">Electronique</option>
+          <option value="vetement">Vetement</option>
+          <option value="document">Document</option>
+          <option value="bagage">Bagage</option>
+          <option value="autre">Autre</option>
+        </select>
+      </div>
+      <div class="filter-group"><i class="fas fa-circle-info"></i>
+        <select id="filterStatus">
+          <option value="">Tous statuts</option>
+          <option value="perdu">Perdu</option>
+          <option value="retrouve">Retrouve</option>
+          <option value="restitue">Restitue</option>
+        </select>
+      </div>
+      <button id="resetFilters" class="btn-reset" type="button"><i class="fas fa-rotate-left"></i> Reinitialiser</button>
+    </section>
+
+    <section class="section-title" id="publications">
+      <h2><i class="fas fa-thumbtack"></i> Publications objets perdus</h2>
+      <span class="count-badge" id="countBadge">0 publication</span>
+    </section>
+
+    <section class="content-grid">
+      <div class="lost-grid" id="rows"></div>
+    </section>
+  </div>
+
+  <div class="modal-bg" id="detailModal">
+    <div class="modal">
+      <div class="modal-head">
+        <h3 class="modal-title" id="detailTitle">Details</h3>
+        <button class="btn-outline" id="closeDetail" type="button">Fermer</button>
+      </div>
+      <div id="detailBody"></div>
+    </div>
+  </div>
+
+  <div class="modal-bg" id="threadModal">
+    <div class="modal">
+      <div class="modal-head">
+        <h3 class="modal-title" id="threadTitle">Sous-publications</h3>
+        <button class="btn-outline" id="closeThread" type="button">Fermer</button>
+      </div>
+      <div class="thread-image">
+        <div class="muted" style="margin-bottom:.4rem">Apercu image de la publication selectionnee</div>
+        <img id="threadPreviewImage" alt="Image publication" src="https://images.unsplash.com/photo-1491553895911-0055eca6402d?auto=format&fit=crop&w=1200&q=60">
+      </div>
+      <div id="threadBody"></div>
+    </div>
+  </div>
+
+  <div class="modal-bg" id="usersModal">
+    <div class="modal" style="max-width:540px;">
+      <div class="users-modal-head">
+        <h3 class="modal-title"><i class="fas fa-users"></i> Choisir un utilisateur</h3>
+        <button class="btn-outline" id="closeUsers" type="button">Fermer</button>
+      </div>
+      <div class="switcher" id="userSwitcher"></div>
+    </div>
+  </div>
+
+  <div class="modal-bg" id="publishModal">
+    <div class="modal" style="max-width:620px;">
+      <div class="modal-head">
+        <h3 class="modal-title"><i class="fas fa-pen-to-square"></i> Nouvelle declaration</h3>
+        <button class="btn-outline" id="closePublish" type="button">Fermer</button>
+      </div>
+      <form id="publishForm" novalidate>
+        <div id="selectedDeclarantInfo" class="muted" style="display:none;margin-bottom:.6rem;"></div>
+        <div id="publishFormError" class="form-error" aria-live="polite"></div>
+        <div class="fg">
+          <label for="title">Titre</label>
+          <input id="title" name="titre" type="text" placeholder="Ex: Sac noir oublie ligne B">
+          <div id="titleError" class="field-error" aria-live="polite"></div>
+        </div>
+        <div class="fg">
+          <label for="description">Description</label>
+          <textarea id="description" name="description" placeholder="Decrivez votre objet"></textarea>
+          <div class="ai-tools">
+            <button type="button" id="generateDescriptionAiBtn" class="btn-outline"><i class="fas fa-wand-magic-sparkles"></i> Description IA</button>
+            <span id="descriptionAiHint" class="muted"></span>
+          </div>
+          <div id="descriptionError" class="field-error" aria-live="polite"></div>
+        </div>
+        <div class="fg">
+          <label for="category">Categorie</label>
+          <select id="category" name="categorie">
+            <option value="">Choisir...</option>
+            <option value="electronique">Electronique</option>
+            <option value="vetement">Vetement</option>
+            <option value="document">Document</option>
+            <option value="bagage">Bagage</option>
+            <option value="autre">Autre</option>
+          </select>
+          <div id="categoryError" class="field-error" aria-live="polite"></div>
+        </div>
+        <div class="fg">
+          <label for="objectStatus">Statut de l'objet</label>
+          <select id="objectStatus" name="statut">
+            <option value="perdu">Perdu</option>
+            <option value="retrouve">Retrouve</option>
+            <option value="restitue">Restitue</option>
+          </select>
+          <div id="objectStatusError" class="field-error" aria-live="polite"></div>
+        </div>
+        <div class="fg">
+          <label for="place">Lieu de perte</label>
+          <input id="place" name="lieu_perte" type="text" placeholder="Ex: Gare centrale">
+          <div id="placeError" class="field-error" aria-live="polite"></div>
+        </div>
+        <div class="fg">
+          <label for="photoFile">Photo (image)</label>
+          <input id="photoFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif">
+          <div class="muted" style="margin-top:.3rem">Formats acceptes: JPG, PNG, WEBP, GIF (max 2 Mo)</div>
+          <div id="photoFileError" class="field-error" aria-live="polite"></div>
+        </div>
+        <div class="fg">
+          <label for="lostDate">Date de perte</label>
+          <input id="lostDate" name="date_perte" type="date">
+          <div id="lostDateError" class="field-error" aria-live="polite"></div>
+        </div>
+        <button class="btn-main" type="submit"><i class="fas fa-paper-plane"></i> Publier</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-bg" id="declarantCreateModalFront">
+    <div class="modal" style="max-width:540px;">
+      <div class="modal-head">
+        <h3 class="modal-title"><i class="fas fa-user-plus"></i> Nouveau declarant non inscrit</h3>
+        <button class="btn-outline" id="closeDeclarantCreateFront" type="button">Fermer</button>
+      </div>
+      <form id="declarantCreateFormFront" novalidate>
+        <div id="declarantCreateErrorFront" class="form-error" aria-live="polite"></div>
+        <div class="fg">
+          <label for="declarantNameFront">Nom complet</label>
+          <input id="declarantNameFront" type="text" placeholder="Ex: Nadia Benali">
+          <div id="declarantNameFrontError" class="field-error" aria-live="polite"></div>
+        </div>
+        <button class="btn-main" type="submit"><i class="fas fa-save"></i> Ajouter</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-bg" id="declarantsListModalFront">
+    <div class="modal" style="max-width:620px;">
+      <div class="modal-head">
+        <h3 class="modal-title"><i class="fas fa-list"></i> Declarants non inscrits</h3>
+        <button class="btn-outline" id="closeDeclarantsListFront" type="button">Fermer</button>
+      </div>
+      <div class="comment-meta" id="declarantsCountFront">0 declarant</div>
+      <div class="comment-list" id="declarantsListFront" style="margin-top:.5rem;"></div>
+      <div class="mfooter">
+        <button type="button" class="btn-outline" id="openNewDeclarantFromListFront">Nouveau declarant</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-bg" id="publicationsImageModal">
+    <div class="modal" style="max-width:760px;">
+      <div class="modal-head">
+        <h3 class="modal-title"><i class="fas fa-images"></i> Mes publications en une image</h3>
+        <button class="btn-outline" id="closePublicationsImage" type="button">Fermer</button>
+      </div>
+      <div class="thread-image">
+        <div class="muted" style="margin-bottom:.4rem">Apercu global de vos objets perdus publies</div>
+        <img id="publicationsSingleImage" alt="Mes publications" src="">
+      </div>
+    </div>
+  </div>
+
+    <script src="../assets/js/lostfound_front_html.js"></script>
+</body>
+</html>
+
+
