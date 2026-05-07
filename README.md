@@ -118,11 +118,11 @@ This project follows the **MVC (Model - View - Controller)** architecture:
 
 ---
 Installation
+
 1️⃣ Clone the repository
 git clone https://github.com/Yasminee014/Esprit-PW-2A26-2526-EchoRide.git
 
 2️⃣ Move the project into your local server directory
-
 Example for XAMPP:
 htdocs/ecoride
 
@@ -139,19 +139,16 @@ Launch XAMPP or your local server.
 6️⃣ Run the project
 http://localhost/ecoride
 
-👥 Collaborators
-Name	Module / Role	GitHub
-Abir Charcheri	User & Admin Module	@abirch13
+# 👥 Collaborators
 
-Yesmine Khsib	Vehicles & Reservation	@yesmine750
-
-Yasmine Tabbane	Trips & Destinations	@Yasminee014
-
-Maram Bahri	Events & Sponsors	@maram-11667
-
-Chahed Tellili	Reclamation & Messaging	@chahedtellili1
-
-Abdelmalak Gafsi	Lost & Found	@abdelmalak-gafsi
+| Name | Module / Role | GitHub |
+|------|------|------|
+| [Abir Charcheri](https://github.com/abirch13) | User & Admin Module | @abirch13 |
+| [Yesmine Khsib](https://github.com/yesmine750) | Vehicles & Reservation | @yesmine750 |
+| [Yasmine Tabbane](https://github.com/Yasminee014) | Trips & Destinations | @Yasminee014 |
+| [Maram Bahri](https://github.com/maram-11667) | Events & Sponsors | @maram-11667 |
+| [Chahed Tellili](https://github.com/chahedtellili1) | Reclamation & Messaging | @chahedtellili1 |
+| [Abdelmalak Gafsi](https://github.com/abdelmalak-gafsi) | Lost & Found | @abdelmalak-gafsi |
 
 
 🔑 Test Accounts
