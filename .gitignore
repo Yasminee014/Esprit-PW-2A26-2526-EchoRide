@@ -1,0 +1,19 @@
+# Fichiers sensibles avec clés API
+Config/StripeConfig.php
+Config/D17Config.php
+
+# Fichiers temporaires
+*.log
+*.tmp
+*.bak
+
+# Dossiers système
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Uploads (optionnel, à ajuster)
+assets/uploads/
