@@ -15,6 +15,17 @@ $rModel = new ReservationModel();
 // Force admin mode for testing (remove in production)
 $_SESSION['is_admin'] = true;
 $_SESSION['user_id']  = 1;
+$_SESSION['admin_id'] = $_SESSION['admin_id'] ?? 1;
+
+// Charger la photo admin
+if (empty($_SESSION['admin_photo'])) {
+    $stmtPhoto = $db->prepare("SELECT photo FROM admins WHERE id = :id");
+    $stmtPhoto->execute([':id' => $_SESSION['admin_id']]);
+    $adminRow = $stmtPhoto->fetch(PDO::FETCH_ASSOC);
+    if ($adminRow && !empty($adminRow['photo'])) {
+        $_SESSION['admin_photo'] = $adminRow['photo'];
+    }
+}
 
 // ─── Récupération du véhicule ──────────────────
 $id = intval($_GET['id'] ?? 0);
@@ -92,8 +103,11 @@ body{font-family:'Poppins',sans-serif;background:linear-gradient(135deg,var(--da
 .admin-nav{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;}
 .admin-nav a{text-decoration:none;padding:.5rem 1.2rem;border-radius:30px;font-size:.9rem;font-weight:500;transition:all .3s;background:transparent;color:#CFE6FF;}
 .admin-nav a:hover{background:rgba(255,255,255,.1);color:#fff;}
-.admin-nav .profile-btn{background:#4A90E2;color:#fff;display:flex;align-items:center;gap:10px;padding:.5rem 1.2rem;}
-.admin-nav .profile-btn:hover{background:#2563EB;transform:translateY(-2px);box-shadow:0 4px 12px rgba(37,99,235,.3);}
+.admin-nav .profile-btn{background:#003050;color:#FFFFFF;display:flex;align-items:center;gap:8px;padding:.5rem 1.2rem;}
+.admin-nav .profile-btn:hover{background:#002050;transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,48,80,.4);}
+.profile-avatar{width:28px;height:28px;background:#5FA8FF;border-radius:50%;display:flex;align-items:center;justify-content:center;overflow:hidden;}
+.profile-avatar i{font-size:0.7rem;color:#FFFFFF;}
+.profile-avatar img{width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;}
 .profile-avatar{width:28px;height:28px;background:#5FA8FF;border-radius:50%;display:flex;align-items:center;justify-content:center;}
 .profile-avatar i{font-size:.8rem;color:#fff;}
 .admin-nav .admin-btn{background:rgba(231,76,60,.2);border:1px solid rgba(231,76,60,.4);color:#e74c3c;}
@@ -203,8 +217,15 @@ body.light-mode .sidebar{background:linear-gradient(180deg,#2F76BC,#1E5EA5,#174C
     </div>
     <div class="admin-nav">
         <a href="/ecoride/View/frontoffice/tous_les_trajets.php">Voir site</a>
-        <a href="profil.php" class="profile-btn">
-            <div class="profile-avatar"><i class="fas fa-user"></i></div>
+        <a href="../../Controller/AdminController.php?action=showProfile" class="profile-btn">
+            <div class="profile-avatar">
+                <?php if (!empty($_SESSION['admin_photo'])): ?>
+                    <img src="../../uploads/photos/<?= htmlspecialchars($_SESSION['admin_photo']) ?>" alt="Photo admin" onerror="this.onerror=null;this.style.display='none';this.nextElementSibling.style.display='flex';">
+                    <i class="fas fa-user-shield" style="display:none"></i>
+                <?php else: ?>
+                    <i class="fas fa-user-shield"></i>
+                <?php endif; ?>
+            </div>
             <span>Profil</span>
         </a>
         <a href="admin.php" class="admin-btn">Admin</a>

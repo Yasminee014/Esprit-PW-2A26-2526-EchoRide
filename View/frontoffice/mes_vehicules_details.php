@@ -137,8 +137,8 @@
 </head>
 <body>
 
-<!-- ══ NAVBAR MODERNE ══ -->
-<?php require_once __DIR__ . '/includes/navbar_moderne.php'; ?>
+<!-- ══ NAVBAR ══ -->
+<?php include_once __DIR__ . '/partials/navbar.php'; ?>
 
 <div class="detail-container">
     <a href="mes_vehicules.php" class="btn-back">

@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 declare(strict_types=1);
 session_start();
 $_SESSION['is_admin'] = true;
@@ -130,7 +130,7 @@ body.light-mode .histo-full-table th { background: rgba(78,163,255,.1); }
             <li><a href="admin_trajet.php?page=passagers"><i class="fas fa-users"></i> Passagers</a></li>
             <li><a href="admin_trajet.php?page=trajets"><i class="fas fa-route"></i> Trajets</a></li>
             <li><a href="admin_trajet.php?page=destinations"><i class="fas fa-map-pin"></i> Destinations</a></li>
-            <li><a href="admin_trajet.php?page=evenements"><i class="fas fa-calendar-alt"></i> Événements</a></li>
+            <li><a href="dashboard_event.php"><i class="fas fa-calendar-alt"></i> Événements</a></li>
             <li><a href="/ecoride/View/backoffice/admin_reclamations.php"><i class="fas fa-exclamation-triangle"></i> Réclamations</a></li>
             <li><a href="admin.php"><i class="fas fa-car"></i> Véhicules</a></li>
             <li><a href="lostfound_admin.php" class="active"><i class="fas fa-search-location"></i> Objets perdus</a></li>

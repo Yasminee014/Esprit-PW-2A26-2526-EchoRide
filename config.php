@@ -5,7 +5,8 @@
 // ============================================================
 
 // ─── CONSTANTES BASE DE DONNÉES ───────────────────────────
-define('DB_HOST',    'localhost');
+define('DB_HOST',    '127.0.0.1');
+define('DB_PORT',    3307);
 define('DB_NAME',    'ecoride');
 define('DB_USER',    'root');
 define('DB_PASS',    '');
@@ -13,10 +14,10 @@ define('DB_CHARSET', 'utf8mb4');
 
 // ─── GROQ API KEY (pour AI Helper et EcoBot) ──────────
 // Obtenez votre clé gratuite sur : https://console.groq.com
-define('GROQ_API_KEY', 'VOTRE_CLE_API_GROQ');
+define('GROQ_API_KEY', '');
 
 // ─── CONSTANTES CHEMINS ────────────────────────────────────
-define('BASE_URL', 'http://localhost/projetadmin/');
+define('BASE_URL', 'http://localhost/ecoride/');
 define('BASE_PATH', dirname(__FILE__) . DIRECTORY_SEPARATOR);
 
 // ─── SESSION ───────────────────────────────────────────────
@@ -24,42 +25,47 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// ─── CLASSE DATABASE (Singleton PDO) ──────────────────────
-class Database {
-    private static ?Database $instance = null;
-    private ?PDO $connection = null;
+// ─── CLASSE DATABASE ───────────────────────────────────────
+if (!class_exists('Database')) {
+    class Database {
+        private static ?PDO $instance = null;
 
-    private function __construct() {
-        $this->connect();
-    }
+        private string $host     = DB_HOST;
+        private int    $port     = DB_PORT;
+        private string $dbname   = DB_NAME;
+        private string $username = DB_USER;
+        private string $password = DB_PASS;
+        private string $charset  = DB_CHARSET;
 
-    private function connect(): void {
-        try {
-            $dsn = 'mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=' . DB_CHARSET;
-            $this->connection = new PDO($dsn, DB_USER, DB_PASS);
-            $this->connection->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-            $this->connection->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
-        } catch (PDOException $e) {
-            die('Erreur de connexion à la base de données : ' . $e->getMessage());
+        private function __construct() {}
+
+        public static function getInstance(): PDO {
+            if (self::$instance === null) {
+                $db = new self();
+                $dsn = "mysql:host={$db->host};port={$db->port};dbname={$db->dbname};charset={$db->charset}";
+                $options = [
+                    PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                    PDO::ATTR_EMULATE_PREPARES   => false,
+                ];
+                try {
+                    self::$instance = new PDO($dsn, $db->username, $db->password, $options);
+                } catch (PDOException $e) {
+                    die(json_encode([
+                        'success' => false,
+                        'message' => 'Erreur de connexion à la base de données : ' . $e->getMessage()
+                    ]));
+                }
+            }
+            return self::$instance;
         }
-    }
-
-    public static function getInstance(): Database {
-        if (self::$instance === null) {
-            self::$instance = new Database();
-        }
-        return self::$instance;
-    }
-
-    public function getConnection(): PDO {
-        return $this->connection;
     }
 }
 
 
 
 
-
+// ─── FONCTION EMAIL (PHPMailer) ───────────────────────────
 
 
 

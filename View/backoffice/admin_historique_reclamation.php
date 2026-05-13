@@ -1,9 +1,9 @@
-<?php
+﻿<?php
 session_start();
 $_SESSION['is_admin'] = true;
 
 try {
-    $pdo = new PDO("mysql:host=localhost;dbname=ecoride;charset=utf8", "root", "");
+    $pdo = new PDO("mysql:host=127.0.0.1;port=3307;dbname=ecoride;charset=utf8mb4", "root", "");
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $pdo->exec("SET NAMES utf8");
 } catch (PDOException $e) {
@@ -160,7 +160,7 @@ body.light-mode .histo-table{background:#fff;}
             <li><a href="/ecoride/View/backoffice/admin_trajet.php?page=passagers"><i class="fas fa-users"></i> Passagers</a></li>
             <li><a href="/ecoride/View/backoffice/admin_trajet.php?page=trajets"><i class="fas fa-route"></i> Trajets</a></li>
             <li><a href="/ecoride/View/backoffice/admin_trajet.php?page=destinations"><i class="fas fa-map-pin"></i> Destinations</a></li>
-            <li><a href="/ecoride/View/backoffice/admin_trajet.php?page=evenements"><i class="fas fa-calendar-alt"></i> Événements</a></li>
+            <li><a href="/ecoride/View/backoffice/dashboard_event.php"><i class="fas fa-calendar-alt"></i> Événements</a></li>
             <li><a href="/ecoride/View/backoffice/admin_reclamations.php" class="active"><i class="fas fa-exclamation-triangle"></i> Réclamations</a></li>
             <li><a href="/ecoride/View/backoffice/admin.php"><i class="fas fa-car"></i> Véhicules</a></li>
             <li><a href="/ecoride/View/backoffice/lostfound_admin.php"><i class="fas fa-search-location"></i> Objets perdus</a></li>

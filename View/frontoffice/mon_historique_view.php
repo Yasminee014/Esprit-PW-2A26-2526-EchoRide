@@ -212,7 +212,7 @@ $baseUrl = strtok($_SERVER['REQUEST_URI'], '?');
 </head>
 <body>
 
-<?php require_once __DIR__ . '/includes/navbar_moderne.php'; ?>
+<?php include_once __DIR__ . '/partials/navbar.php'; ?>
 
 <div class="container">
 

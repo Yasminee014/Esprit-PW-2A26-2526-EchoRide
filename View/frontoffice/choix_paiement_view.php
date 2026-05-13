@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 if (session_status() === PHP_SESSION_NONE) session_start();
 
 if (!isset($reservation) || !isset($vehicule)) {
@@ -117,7 +117,7 @@ $numResa = $reservation['id'];
 </head>
 <body>
 
-<?php require_once __DIR__ . '/includes/navbar_moderne.php'; ?>
+<?php include_once __DIR__ . '/partials/navbar.php'; ?>
 
 <div class="container">
     

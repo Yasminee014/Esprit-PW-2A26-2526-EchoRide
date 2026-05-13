@@ -230,6 +230,8 @@ class VehiculeController {
         } else {
             $_SESSION['errors'] = $errors;
             $_SESSION['old'] = $data;
+            header('Location: mes_vehicules.php?action=add');
+            exit;
         }
 
         header('Location: mes_vehicules.php');
@@ -247,28 +249,59 @@ class VehiculeController {
 
         // Vérifier que le véhicule appartient bien au conducteur
         $vehicule = $this->model->getById($id);
-        if (!$vehicule || $vehicule['user_id'] != $userId) {
+        if (!$vehicule || intval($vehicule['user_id']) !== intval($userId)) {
             $_SESSION['errors'] = ['Accès refusé.'];
             header('Location: mes_vehicules.php');
             exit;
         }
 
-        $data   = $this->sanitize($_POST);
+        // Gérer l'upload de la photo
+        $photoName = $vehicule['photo']; // conserver la photo existante par défaut
+        if (isset($_FILES['photo']) && $_FILES['photo']['error'] === UPLOAD_ERR_OK) {
+            $uploadDir = __DIR__ . '/../assets/uploads/vehicules/';
+            if (!is_dir($uploadDir)) {
+                mkdir($uploadDir, 0777, true);
+            }
+            $extension = strtolower(pathinfo($_FILES['photo']['name'], PATHINFO_EXTENSION));
+            if (in_array($extension, ['jpg', 'jpeg', 'png'])) {
+                $newPhotoName = uniqid('vehicule_') . '.' . $extension;
+                if (move_uploaded_file($_FILES['photo']['tmp_name'], $uploadDir . $newPhotoName)) {
+                    // Supprimer l'ancienne photo si elle existe
+                    if (!empty($vehicule['photo']) && file_exists($uploadDir . $vehicule['photo'])) {
+                        unlink($uploadDir . $vehicule['photo']);
+                    }
+                    $photoName = $newPhotoName;
+                }
+            }
+        }
+
+        $data = $this->sanitize($_POST);
+        $data['photo'] = $photoName;
+
+        // Vérification unicité immatriculation (exclure véhicule courant)
         $errors = $this->model->validate($data);
+        if ($this->model->immatriculationExists($data['immatriculation'], $id)) {
+            $errors[] = "Cette immatriculation (" . htmlspecialchars($data['immatriculation']) . ") est déjà utilisée par un autre véhicule.";
+        }
 
         if (!empty($errors)) {
             $_SESSION['errors'] = $errors;
-            header('Location: mes_vehicules.php');
+            header('Location: mes_vehicules.php?action=edit&id=' . $id);
             exit;
         }
 
-        if ($this->model->update($id, $data)) {
-            $_SESSION['success'] = 'Véhicule modifié avec succès.';
-        } else {
-            $_SESSION['errors']  = ['Erreur lors de la modification.'];
+        try {
+            if ($this->model->update($id, $data)) {
+                $_SESSION['success'] = 'Véhicule modifié avec succès.';
+                header('Location: mes_vehicules.php');
+            } else {
+                $_SESSION['errors'] = ['Erreur lors de la modification (base de données).'];
+                header('Location: mes_vehicules.php?action=edit&id=' . $id);
+            }
+        } catch (Throwable $e) {
+            $_SESSION['errors'] = ['Erreur SQL : ' . $e->getMessage()];
+            header('Location: mes_vehicules.php?action=edit&id=' . $id);
         }
-
-        header('Location: mes_vehicules.php');
         exit;
     }
 
@@ -302,11 +335,11 @@ class VehiculeController {
     private function sanitize(array $data): array {
         return [
             'user_id'          => intval($data['user_id'] ?? 0) ?: intval($_SESSION['user_id'] ?? 0),
-            'marque'           => htmlspecialchars(trim($data['marque']          ?? ''), ENT_QUOTES, 'UTF-8'),
-            'modele'           => htmlspecialchars(trim($data['modele']          ?? ''), ENT_QUOTES, 'UTF-8'),
+            'marque'           => trim($data['marque']          ?? ''),
+            'modele'           => trim($data['modele']          ?? ''),
             'trajet_id'        => intval($data['trajet_id']       ?? 0) ?: null,
             'immatriculation'  => strtoupper(trim($data['immatriculation']       ?? '')),
-            'couleur'          => htmlspecialchars(trim($data['couleur']          ?? ''), ENT_QUOTES, 'UTF-8'),
+            'couleur'          => trim($data['couleur']          ?? ''),
             'capacite'         => intval($data['capacite']          ?? 4),
             'climatisation'    => isset($data['climatisation']) ? 1 : 0,
             'statut'           => $data['statut']                   ?? 'disponible',

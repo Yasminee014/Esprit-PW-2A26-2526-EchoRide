@@ -1,3 +1,4 @@
+<?php require_once __DIR__ . '/includes/auth_guard.php'; ?>
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -372,7 +373,7 @@ body{
 </style>
 </head>
 <body>
-  <?php require_once __DIR__ . '/includes/navbar_moderne.php'; ?>
+  <?php include_once __DIR__ . '/partials/navbar.php'; ?>
   <!-- Bouton Retour design -->
 <div style="max-width: 1100px; margin: 1rem auto 0; padding: 0 1.5rem;">
     <a href="tous_les_trajets.php" style="

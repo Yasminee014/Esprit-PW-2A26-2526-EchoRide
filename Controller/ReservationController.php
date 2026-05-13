@@ -19,10 +19,10 @@ class ReservationController {
      */
     public function showReservationForm(): void {
         $vehiculeId = intval($_GET['vehicule_id'] ?? 0);
+        $trajetId   = intval($_GET['trajet_id']   ?? 0);
 
         // Si vehicule_id absent, on le retrouve via trajet_id
         if (!$vehiculeId) {
-            $trajetId = intval($_GET['trajet_id'] ?? 0);
             if ($trajetId) {
                 $db = Database::getInstance();
 
@@ -51,18 +51,36 @@ class ReservationController {
                     } catch (Exception $e) {}
                 }
 
+                // 3. Fallback global : premier véhicule disponible du système
+                if (!$vehiculeId) {
+                    try {
+                        $db = Database::getInstance();
+                        $stmt = $db->query("SELECT id FROM vehicules WHERE statut = 'disponible' ORDER BY id DESC LIMIT 1");
+                        $row = $stmt->fetch();
+                        if ($row) {
+                            $vehiculeId = intval($row['id']);
+                        }
+                    } catch (Exception $e) {}
+                }
+
                 if ($vehiculeId) {
                     $qs = http_build_query(array_merge($_GET, ['vehicule_id' => $vehiculeId]));
                     header('Location: reserver_vehicule.php?' . $qs);
                     exit;
                 }
+
+                // Aucun véhicule trouvé — afficher une page d'erreur conviviale
+                $_SESSION['reservation_error'] = 'Aucun véhicule disponible pour ce trajet. Veuillez réessayer ultérieurement.';
+                header('Location: tous_les_trajets.php?error=no_vehicle');
+                exit;
             }
             header('Location: tous_les_trajets.php');
             exit;
         }
         $vehicule = $this->vehiculeModel->getById($vehiculeId);
         if (!$vehicule) {
-            header('Location: tous_les_trajets.php');
+            $_SESSION['reservation_error'] = 'Le véhicule demandé est introuvable.';
+            header('Location: tous_les_trajets.php?error=not_found');
             exit;
         }
 

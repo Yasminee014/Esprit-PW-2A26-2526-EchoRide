@@ -1,5 +1,6 @@
 <?php
 if (session_status() === PHP_SESSION_NONE) session_start();
+require_once __DIR__ . '/includes/auth_guard.php';
 
 require_once __DIR__ . '/../../Config/Database.php';
 require_once __DIR__ . '/MatchingIA.php';
@@ -335,7 +336,7 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
 </style>
 </head>
 <body>
-<?php require_once __DIR__ . '/includes/navbar_moderne.php'; ?>
+<?php include_once __DIR__ . '/partials/navbar.php'; ?>
 
 <!-- Bouton Retour design -->
 <div style="max-width: 1100px; margin: 1rem auto 0; padding: 0 1.5rem;">

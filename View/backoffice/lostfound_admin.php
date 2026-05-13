@@ -10,6 +10,16 @@ require_once __DIR__ . '/../../Config/Database.php';
 $pdo = Database::getInstance();
 $controller = new LostFoundAdminController(new LostFoundRepository($pdo));
 
+// Charger la photo admin
+if (empty($_SESSION['admin_photo']) && !empty($_SESSION['admin_id'])) {
+    $stmtPhoto = $pdo->prepare("SELECT photo FROM admins WHERE id = :id");
+    $stmtPhoto->execute([':id' => $_SESSION['admin_id']]);
+    $adminRow = $stmtPhoto->fetch(PDO::FETCH_ASSOC);
+    if ($adminRow && !empty($adminRow['photo'])) {
+        $_SESSION['admin_photo'] = $adminRow['photo'];
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $action = trim((string) ($_POST['action'] ?? ''));
 
@@ -133,8 +143,10 @@ $initialSignalements = array_map(
     background: #5FA8FF;
     border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
 }
 .profile-avatar i { font-size: 0.8rem; color: #FFFFFF; }
+.profile-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
 .admin-nav .admin-btn {
     background: rgba(231,76,60,0.2);
     border: 1px solid rgba(231,76,60,0.4);
@@ -549,7 +561,7 @@ $initialSignalements = array_map(
             <li><a href="admin_trajet.php?page=passagers"><i class="fas fa-users"></i> Passagers</a></li>
             <li><a href="admin_trajet.php?page=trajets"><i class="fas fa-route"></i> Trajets</a></li>
             <li><a href="admin_trajet.php?page=destinations"><i class="fas fa-map-pin"></i> Destinations</a></li>
-            <li><a href="admin_trajet.php?page=evenements"><i class="fas fa-calendar-alt"></i> Événements</a></li>
+            <li><a href="dashboard_event.php"><i class="fas fa-calendar-alt"></i> Événements</a></li>
             <li><a href="/ecoride/View/backoffice/admin_reclamations.php"><i class="fas fa-exclamation-triangle"></i> Réclamations</a></li>
             <li><a href="admin.php"><i class="fas fa-car"></i> Véhicules</a></li>
             <li><a href="lostfound_admin.php" class="active"><i class="fas fa-search-location"></i> Objets perdus</a></li>
@@ -570,8 +582,15 @@ $initialSignalements = array_map(
       </div>
       <div class="admin-nav">
         <a href="/ecoride/View/frontoffice/tous_les_trajets.php">Voir site</a>
-        <a href="profil.php" class="profile-btn">
-          <div class="profile-avatar"><i class="fas fa-user"></i></div>
+        <a href="<?= BASE_URL ?>Controller/AdminController.php?action=showProfile" class="profile-btn">
+          <div class="profile-avatar">
+            <?php if (!empty($_SESSION['admin_photo'])): ?>
+              <img src="<?= BASE_URL ?>uploads/photos/<?= htmlspecialchars($_SESSION['admin_photo']) ?>" alt="Photo admin" onerror="this.onerror=null;this.style.display='none';this.nextElementSibling.style.display='flex';">
+              <i class="fas fa-user-shield" style="display:none"></i>
+            <?php else: ?>
+              <i class="fas fa-user-shield"></i>
+            <?php endif; ?>
+          </div>
           <span>Profil</span>
         </a>
         <a href="admin.php" class="admin-btn">Admin</a>

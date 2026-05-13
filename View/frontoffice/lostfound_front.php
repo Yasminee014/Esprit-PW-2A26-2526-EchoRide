@@ -1,7 +1,8 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__ . '/includes/auth_guard.php';
 
-require_once __DIR__ . '/../../controller/LostFoundFrontController.php';
+require_once __DIR__ . '/../../Controller/LostFoundFrontController.php';
 
 $pdo = Database::getInstance();
 $controller = new LostFoundFrontController(new LostFoundFrontRepository($pdo));
@@ -489,122 +490,7 @@ body.light-mode .navbar-modern {
     </style>
 </head>
 <body>
-<nav class="navbar-modern">
-  <a href="http://localhost/index.php" class="logo">
-    <img src="./Véhicules Disponibles _ EcoRide_files/photo.png" alt="EcoRide Logo" class="logo-img" onerror="this.style.display=&#39;none&#39;">
-    <div>
-      <div class="logo-text">ECO RIDE</div>
-      <div class="logo-tagline">Covoiturage Intelligent</div>
-    </div>
-  </a>
-    
-  <button id="menuBtn" class="menu-toggle" onclick="toggleMenu()">
-    <i class="fas fa-bars"></i>
-  </button>
-    
-  <ul class="nav-links" id="navLinks">
-    <!-- Bouton Accueil -->
-    <li><a href="/ecoride/View/frontoffice/tous_les_trajets.php">Accueil</a></li>
-        
-    <li><a href="/ecoride/View/frontoffice/index.php">Événements</a></li>
-    <li><a href="/ecoride/View/frontoffice/index.php">Sponsors</a></li>
-    <li><a href="/ecoride/View/frontoffice/tous_les_trajets.php">Covoiturage</a></li>
-    <li><a href="/ecoride/View/frontoffice/lostfound_front.php" class="active">Objets Perdus</a></li>
-        
-    <li class="profile-dropdown">
-      <button class="profile-btn" onclick="toggleProfileDropdown(event)">
-        <div class="profile-avatar">
-          <i class="fas fa-user"></i>
-        </div>
-        <span id="currentUserName">Profil</span>
-        <i class="fas fa-chevron-down"></i>
-      </button>
-      <div class="dropdown-menu" id="profileDropdown">
-        <div class="dropdown-header">
-          <div class="avatar">
-            <i class="fas fa-user"></i>
-          </div>
-          <div class="user-info">
-            <div class="user-name">Utilisateur</div>
-            <div class="user-role">Membre EcoRide</div>
-          </div>
-        </div>
-                
-        <div class="dropdown-links">
-          <a href="/ecoride/View/frontoffice/user.php"><i class="fas fa-user-circle"></i> Mon profil</a>
-          <a href="/ecoride/View/frontoffice/tous_les_trajets.php"><i class="fas fa-car"></i> Covoiturages</a>
-          <a href="/ecoride/View/frontoffice/mes_trajets.php"><i class="fas fa-map-marker-alt"></i> Mes trajets</a>
-          <a href="/ecoride/View/frontoffice/mes_vehicules.php"><i class="fas fa-key"></i> Mes véhicules</a>
-          <a href="/ecoride/View/frontoffice/mon_historique.php"><i class="fas fa-history"></i> Mon historique</a>
-          <a href="/ecoride/View/frontoffice/user.php?tab=favoris"><i class="fas fa-heart"></i> Mes favoris</a>
-                    
-          <!-- NOUVEAUX LIENS - juste en dessous de mes favoris -->
-          <a href="/ecoride/View/frontoffice/index.php"><i class="fas fa-exclamation-triangle"></i> Réclamations</a>
-          <a href="/ecoride/View/frontoffice/mes_objets_perdus.php"><i class="fas fa-search"></i> Mes objets perdus</a>
-        </div>
-                
-        <div class="dropdown-divider"></div>
-                
-        <div class="dropdown-actions">
-          <a href="http://localhost/ecoride/View/frontoffice/logout.php"><i class="fas fa-sign-out-alt"></i> Déconnexion</a>
-        </div>
-      </div>
-    </li>
-        
-    <!-- Bouton Admin -->
-    <li><a href="/ecoride/View/backoffice/admin.php" class="admin-btn">Admin</a></li>
-        
-    <li class="theme-li">
-      <button class="theme-btn" type="button" id="themeToggle" title="Basculer entre noir et blanc" aria-label="Basculer entre noir et blanc">
-        <i class="fas fa-moon"></i>
-      </button>
-    </li>
-  </ul>
-</nav>
-
-<script>
-function toggleMenu() {
-    document.getElementById('navLinks').classList.toggle('show');
-}
-
-function toggleProfileDropdown(event) {
-    event.stopPropagation();
-    document.getElementById('profileDropdown').classList.toggle('show');
-}
-
-function toggleTheme() {
-    document.body.classList.toggle('light-mode');
-    const isLight = document.body.classList.contains('light-mode');
-    localStorage.setItem('theme', isLight ? 'light' : 'dark');
-    
-    const themeBtn = document.getElementById('themeBtn');
-    const icon = themeBtn.querySelector('i');
-    
-    if (isLight) {
-        icon.className = 'fas fa-sun';
-    } else {
-        icon.className = 'fas fa-moon';
-    }
-}
-
-if (localStorage.getItem('theme') === 'light') {
-    document.body.classList.add('light-mode');
-    const themeBtn = document.getElementById('themeBtn');
-    if (themeBtn) {
-        const icon = themeBtn.querySelector('i');
-        icon.className = 'fas fa-sun';
-    }
-}
-
-window.onclick = function(event) {
-    if (!event.target.closest('.profile-dropdown')) {
-        var dropdown = document.getElementById('profileDropdown');
-        if (dropdown && dropdown.classList.contains('show')) {
-            dropdown.classList.remove('show');
-        }
-    }
-}
-</script>
+<?php include_once __DIR__ . '/partials/navbar.php'; ?>
 
   <div class="container">
     <section class="hero-section">
@@ -656,7 +542,7 @@ window.onclick = function(event) {
             <article class="lost-card">
               <div class="card-head">
                 <span class="card-id">#<?= htmlspecialchars((string) ($obj['id'] ?? '')) ?></span>
-                <span class="status-badge <?= htmlspecialchars((string) ($obj['statut'] ?? 'perdu')) ?>"><?= htmlspecialchars((string) ($obj['statut'] ?? 'perdu')) ?></span>
+                <span class="status-badge status-<?= htmlspecialchars((string) ($obj['statut'] ?? 'perdu')) ?>"><?= htmlspecialchars((['perdu'=>'Perdu','retrouve'=>'Retrouvé','restitue'=>'Restitué'][$obj['statut'] ?? 'perdu'] ?? htmlspecialchars((string)($obj['statut'] ?? 'perdu')))) ?></span>
               </div>
               <div class="card-content">
                 <div class="card-title"><?= htmlspecialchars((string) ($obj['title'] ?? $obj['titre'] ?? 'Objet')) ?></div>
@@ -668,7 +554,7 @@ window.onclick = function(event) {
                   <span class="tag"><i class="fas fa-calendar-days"></i> <?= htmlspecialchars((string) ($obj['date_perte'] ?? '')) ?></span>
                 </div>
                 <div class="card-actions">
-                  <button class="action-btn" data-action="detail" data-id="<?= htmlspecialchars((string) ($obj['id'] ?? '')) ?>">Details</button>
+                  <button class="action-btn" data-action="detail" data-id="<?= htmlspecialchars((string) ($obj['id'] ?? '')) ?>">Détails</button>
                 </div>
               </div>
             </article>
@@ -835,7 +721,8 @@ window.LOSTFOUND_FRONT_CONFIG = {
         total: <?php echo (int) $initialTotalDeclarations; ?>,
         open: <?php echo (int) $initialOpenDeclarations; ?>,
         resolved: <?php echo (int) $initialResolvedDeclarations; ?>
-    }
+    },
+    currentUserId: <?php echo (int) ($_SESSION['user_id'] ?? 0); ?>
 };
 
 console.log('✅ LOSTFOUND_FRONT_CONFIG chargé:', window.LOSTFOUND_FRONT_CONFIG);

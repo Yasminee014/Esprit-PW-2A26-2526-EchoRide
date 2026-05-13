@@ -4,6 +4,31 @@ $allowedPages = ['dashboard', 'passagers', 'trajets', 'destinations', 'evenement
 if (!in_array($initialPage, $allowedPages, true)) {
     $initialPage = 'trajets';
 }
+
+require_once __DIR__ . '/../../Config/Database.php';
+if (session_status() === PHP_SESSION_NONE) session_start();
+if (!isset($_SESSION['admin_id'])) {
+    header('Location: ../../Controller/AdminController.php?action=showLogin');
+    exit();
+}
+
+$pdo = Database::getInstance();
+
+// Charger la photo admin depuis la BDD
+if (empty($_SESSION['admin_photo'])) {
+    $stmtPhoto = $pdo->prepare("SELECT photo FROM admins WHERE id = :id");
+    $stmtPhoto->execute([':id' => $_SESSION['admin_id']]);
+    $adminRow = $stmtPhoto->fetch(PDO::FETCH_ASSOC);
+    if ($adminRow && !empty($adminRow['photo'])) {
+        $_SESSION['admin_photo'] = $adminRow['photo'];
+    }
+}
+
+// Passagers
+$passagers = $pdo->query("SELECT id, prenom, nom, email, telephone, role, statut, created_at FROM users ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
+
+// Événements
+$evenements = $pdo->query("SELECT id, titre, type, ville, date_evenement, nb_places, statut FROM evenements ORDER BY date_evenement DESC")->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -309,17 +334,27 @@ if (!in_array($initialPage, $allowedPages, true)) {
         }
 
         .profile-avatar {
-            width: 28px;
-            height: 28px;
+            width: 36px;
+            height: 36px;
             background: #5FA8FF;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
+            overflow: hidden;
+            flex-shrink: 0;
+            border: 2px solid rgba(255,255,255,0.3);
+        }
+
+        .profile-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 50%;
         }
 
         .profile-avatar i {
-            font-size: 0.8rem;
+            font-size: 0.9rem;
             color: #FFFFFF;
         }
 
@@ -597,6 +632,34 @@ if (!in_array($initialPage, $allowedPages, true)) {
             border: 1px solid rgba(97,179,250,0.25);
         }
 
+        .badge-pass {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.22rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.73rem;
+            font-weight: 600;
+        }
+        .badge-pass.actif  { background: rgba(39,174,96,0.15);  color: #27ae60; border: 1px solid rgba(39,174,96,0.3); }
+        .badge-pass.inactif{ background: rgba(231,76,60,0.12);  color: #e74c3c; border: 1px solid rgba(231,76,60,0.3); }
+
+        .act-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 30px;
+            height: 30px;
+            border-radius: 6px;
+            font-size: 0.78rem;
+            text-decoration: none;
+            transition: opacity .18s;
+        }
+        .act-btn:hover { opacity: .75; }
+        .act-view  { background: rgba(52,152,219,0.15); color: #3498db; }
+        .act-edit  { background: rgba(52,152,219,0.15); color: #3498db; }
+        .act-ban   { background: rgba(231,76,60,0.12);  color: #e74c3c; }
+        .act-unban { background: rgba(39,174,96,0.15);  color: #27ae60; }
+
         .dist-pill {
             display: inline-flex;
             align-items: center;
@@ -748,12 +811,12 @@ if (!in_array($initialPage, $allowedPages, true)) {
         <div class="nav-section">GESTION</div>
         <nav>
             <ul>
-                <li><button class="nav-btn <?= $initialPage === 'dashboard' ? 'active' : '' ?>" data-page="dashboard"><i class="fas fa-tachometer-alt"></i> Dashboard</button></li>
-                <li><button class="nav-btn" data-page="passagers"><i class="fas fa-users"></i> Passagers</button></li>
-                <li><button class="nav-btn <?= $initialPage === 'trajets' ? 'active' : '' ?>" data-page="trajets"><i class="fas fa-route"></i> Trajets</button></li>
-                <li><button class="nav-btn <?= $initialPage === 'destinations' ? 'active' : '' ?>" data-page="destinations"><i class="fas fa-map-pin"></i> Destinations</button></li>
-                <li><button class="nav-btn" data-page="evenements"><i class="fas fa-calendar-alt"></i> Événements</button></li>
-                <li><a class="nav-btn" href="/ecoride/View/backoffice/admin_reclamations.php"><i class="fas fa-exclamation-triangle"></i> Réclamations</a></li>
+                <li><a href="admin_dashboard.php" class="nav-btn"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
+                <li><a href="admin_trajet.php?page=passagers" class="nav-btn <?= $initialPage === 'passagers' ? 'active' : '' ?>" data-page="passagers"><i class="fas fa-users"></i> Passagers</a></li>
+                <li><a href="admin_trajet.php?page=trajets" class="nav-btn <?= $initialPage === 'trajets' ? 'active' : '' ?>" data-page="trajets"><i class="fas fa-route"></i> Trajets</a></li>
+                <li><a href="admin_trajet.php?page=destinations" class="nav-btn <?= $initialPage === 'destinations' ? 'active' : '' ?>" data-page="destinations"><i class="fas fa-map-pin"></i> Destinations</a></li>
+                <li><a href="dashboard_event.php" class="nav-btn"><i class="fas fa-calendar-alt"></i> Événements</a></li>
+                <li><a class="nav-btn" href="admin_reclamations.php"><i class="fas fa-exclamation-triangle"></i> Réclamations</a></li>
                 <li><a class="nav-btn" href="admin.php"><i class="fas fa-car"></i> Véhicules</a></li>
                 <li><a class="nav-btn" href="lostfound_admin.php"><i class="fas fa-search-location"></i> Objets perdus</a></li>
             </ul>
@@ -781,8 +844,15 @@ if (!in_array($initialPage, $allowedPages, true)) {
             <div class="admin-nav">
                 <a href="/ecoride/View/frontoffice/tous_les_trajets.php">Voir site</a>
 
-                <a href="profil.php" class="profile-btn">
-                    <div class="profile-avatar"><i class="fas fa-user"></i></div>
+                <a href="../../Controller/AdminController.php?action=showProfile" class="profile-btn">
+                    <div class="profile-avatar">
+                        <?php if (!empty($_SESSION['admin_photo'])): ?>
+                            <img src="../../uploads/photos/<?= htmlspecialchars($_SESSION['admin_photo']) ?>" alt="Photo admin" onerror="this.onerror=null;this.style.display='none';this.nextElementSibling.style.display='flex';">
+                            <i class="fas fa-user-shield" style="display:none"></i>
+                        <?php else: ?>
+                            <i class="fas fa-user-shield"></i>
+                        <?php endif; ?>
+                    </div>
                     <span>Profil</span>
                 </a>
 
@@ -808,8 +878,70 @@ if (!in_array($initialPage, $allowedPages, true)) {
 
             <!-- ========== PAGE PASSAGERS ========== -->
             <div id="page-passagers" class="page-content" style="display:<?= $initialPage === 'passagers' ? 'block' : 'none' ?>;">
-                <div class="section-divider"><span>Gestion des Passagers</span></div>
-                <div class="empty"><i class="fas fa-users"></i><p>Module des passagers</p></div>
+                <div class="stats">
+                    <div class="stat"><i class="fas fa-users"></i><div class="num"><?= count($passagers) ?></div><div class="lbl">Total utilisateurs</div></div>
+                    <div class="stat"><i class="fas fa-user-check"></i><div class="num"><?= count(array_filter($passagers, fn($u) => $u['statut'] === 'actif')) ?></div><div class="lbl">Actifs</div></div>
+                    <div class="stat"><i class="fas fa-user-times"></i><div class="num"><?= count(array_filter($passagers, fn($u) => $u['statut'] === 'inactif')) ?></div><div class="lbl">Inactifs</div></div>
+                    <div class="stat"><i class="fas fa-car"></i><div class="num"><?= count(array_filter($passagers, fn($u) => $u['role'] === 'conducteur')) ?></div><div class="lbl">Conducteurs</div></div>
+                </div>
+                <div class="section-divider"><span>Liste des Utilisateurs</span></div>
+                <div class="toolbar">
+                    <div class="toolbar-left">
+                        <div class="search-box"><i class="fas fa-search"></i><input type="text" id="passSearch" oninput="filterPassagers(this.value)" placeholder="Rechercher utilisateur..."></div>
+                    </div>
+                    <div class="toolbar-right">
+                        <button class="btn btn-pdf" onclick="exportPassagersPDF()"><i class="fas fa-file-pdf"></i> Exporter PDF</button>
+                    </div>
+                </div>
+                <div class="tbl-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Nom complet</th>
+                                <th>Email</th>
+                                <th>Téléphone</th>
+                                <th>Statut</th>
+                                <th>Date d'inscription</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="passagersBody">
+                        <?php foreach ($passagers as $u): ?>
+                            <?php if (($u['role'] ?? '') !== 'passager') continue; ?>
+                            <tr>
+                                <td><?= (int)$u['id'] ?></td>
+                                <td><strong><?= htmlspecialchars($u['prenom'] . ' ' . $u['nom']) ?></strong></td>
+                                <td><?= htmlspecialchars($u['email']) ?></td>
+                                <td><?= htmlspecialchars($u['telephone'] ?? '—') ?></td>
+                                <td>
+                                    <?php if ($u['statut'] === 'actif'): ?>
+                                        <span class="badge-pass actif">Actif</span>
+                                    <?php else: ?>
+                                        <span class="badge-pass inactif">Banni</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td><?= $u['created_at'] ? htmlspecialchars(date('d/m/Y', strtotime($u['created_at']))) : '—' ?></td>
+                                <td>
+                                    <div style="display:flex;gap:6px;align-items:center">
+                                        <a href="../../Controller/AdminController.php?action=showPassagerDetailsPage&id=<?= (int)$u['id'] ?>" class="act-btn act-view" title="Voir les détails"><i class="fas fa-eye"></i></a>
+                                        <a href="../../Controller/AdminController.php?action=showEditPassager&id=<?= (int)$u['id'] ?>" class="act-btn act-edit" title="Modifier"><i class="fas fa-pen"></i></a>
+                                        <?php if ($u['statut'] === 'actif'): ?>
+                                        <a href="../../Controller/AdminController.php?action=banPassager&id=<?= (int)$u['id'] ?>" class="act-btn act-ban" title="Bannir" onclick="return confirm('Bannir <?= addslashes(htmlspecialchars($u['prenom'] . ' ' . $u['nom'])) ?> ?')"><i class="fas fa-ban"></i></a>
+                                        <?php else: ?>
+                                        <a href="../../Controller/AdminController.php?action=unbanPassager&id=<?= (int)$u['id'] ?>" class="act-btn act-unban" title="Réactiver"><i class="fas fa-check-circle"></i></a>
+                                        <?php endif; ?>
+                                    </div>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                        <?php if (empty($passagers)): ?>
+                            <tr class="empty-row"><td colspan="7" class="empty"><i class="fas fa-users"></i> Aucun passager</td></tr>
+                        <?php endif; ?>
+                        </tbody>
+                    </table>
+                    <div class="pag" id="passagersPag"></div>
+                </div>
             </div>
 
             <!-- ========== PAGE TRAJETS ========== -->
@@ -893,8 +1025,57 @@ if (!in_array($initialPage, $allowedPages, true)) {
 
             <!-- ========== PAGE ÉVÉNEMENTS ========== -->
             <div id="page-evenements" class="page-content" style="display:<?= $initialPage === 'evenements' ? 'block' : 'none' ?>;">
-                <div class="section-divider"><span>Gestion des Événements</span></div>
-                <div class="empty"><i class="fas fa-calendar-alt"></i><p>Module des événements</p></div>
+                <div class="stats">
+                    <div class="stat"><i class="fas fa-calendar-alt"></i><div class="num"><?= count($evenements) ?></div><div class="lbl">Total événements</div></div>
+                    <div class="stat"><i class="fas fa-calendar-check"></i><div class="num"><?= count(array_filter($evenements, fn($e) => $e['statut'] === 'actif')) ?></div><div class="lbl">Actifs</div></div>
+                    <div class="stat"><i class="fas fa-calendar-times"></i><div class="num"><?= count(array_filter($evenements, fn($e) => $e['statut'] === 'annulé')) ?></div><div class="lbl">Annulés</div></div>
+                    <div class="stat"><i class="fas fa-users"></i><div class="num"><?= array_sum(array_column($evenements, 'nb_places')) ?></div><div class="lbl">Places totales</div></div>
+                </div>
+                <div class="section-divider"><span>Liste des Événements</span></div>
+                <div class="toolbar">
+                    <div class="toolbar-left">
+                        <div class="search-box"><i class="fas fa-search"></i><input type="text" id="eventSearch" oninput="filterEvenements(this.value)" placeholder="Rechercher événement..."></div>
+                    </div>
+                </div>
+                <div class="tbl-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Titre</th>
+                                <th>Type</th>
+                                <th>Ville</th>
+                                <th>Date</th>
+                                <th>Places</th>
+                                <th>Statut</th>
+                            </tr>
+                        </thead>
+                        <tbody id="evenementsBody">
+                        <?php foreach ($evenements as $e): ?>
+                            <tr>
+                                <td><?= $e['id'] ?></td>
+                                <td><?= htmlspecialchars($e['titre']) ?></td>
+                                <td><span class="chip"><?= htmlspecialchars($e['type'] ?? '—') ?></span></td>
+                                <td><?= htmlspecialchars($e['ville'] ?? '—') ?></td>
+                                <td><?= $e['date_evenement'] ? date('d/m/Y', strtotime($e['date_evenement'])) : '—' ?></td>
+                                <td><?= (int)$e['nb_places'] ?></td>
+                                <td>
+                                    <?php if ($e['statut'] === 'actif'): ?>
+                                        <span style="color:#27ae60;font-weight:600"><i class="fas fa-circle" style="font-size:.55rem"></i> Actif</span>
+                                    <?php elseif ($e['statut'] === 'annulé'): ?>
+                                        <span style="color:#e74c3c;font-weight:600"><i class="fas fa-circle" style="font-size:.55rem"></i> Annulé</span>
+                                    <?php else: ?>
+                                        <span style="color:#f39c12;font-weight:600"><i class="fas fa-circle" style="font-size:.55rem"></i> <?= htmlspecialchars($e['statut']) ?></span>
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                        <?php if (empty($evenements)): ?>
+                            <tr><td colspan="7" class="empty"><i class="fas fa-calendar-alt"></i> Aucun événement</td></tr>
+                        <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
             <!-- ========== PAGE RÉCLAMATIONS ========== -->
@@ -920,6 +1101,116 @@ if (!in_array($initialPage, $allowedPages, true)) {
 </div>
 
 <script>
+/* ========== PAGINATION ET FILTRES PASSAGERS ========== */
+let pPage = 1;
+const pLimit = 5;
+let pQuery = '';
+
+function renderPassagersPag() {
+    const rows = Array.from(document.querySelectorAll('#passagersBody tr:not(.empty-row)'));
+    if (rows.length === 0) return;
+    
+    const filteredRows = rows.filter(row => row.textContent.toLowerCase().includes(pQuery));
+    rows.forEach(row => row.style.display = 'none');
+    
+    const total = filteredRows.length;
+    const totalPages = Math.max(1, Math.ceil(total / pLimit));
+    if (pPage > totalPages) pPage = 1;
+    
+    const start = (pPage - 1) * pLimit;
+    const end = start + pLimit;
+    filteredRows.slice(start, end).forEach(row => row.style.display = '');
+    
+    const pagEl = document.getElementById('passagersPag');
+    if (!pagEl) return;
+    
+    if (total <= pLimit) {
+        pagEl.innerHTML = '';
+        return;
+    }
+    
+    let html = '<span class="pag-info">Page ' + pPage + ' / ' + totalPages + '</span>';
+    if (pPage > 1) html += '<button class="pag-btn" onclick="goToPassagersPage(' + (pPage - 1) + ')"><i class="fas fa-chevron-left"></i></button>';
+    for (let i = 1; i <= totalPages; i++) {
+        if (i === 1 || i === totalPages || Math.abs(i - pPage) <= 1) {
+            html += '<button class="pag-btn' + (i === pPage ? ' on' : '') + '" onclick="goToPassagersPage(' + i + ')">' + i + '</button>';
+        } else if (Math.abs(i - pPage) === 2) {
+            html += '<span class="pag-info">…</span>';
+        }
+    }
+    if (pPage < totalPages) html += '<button class="pag-btn" onclick="goToPassagersPage(' + (pPage + 1) + ')"><i class="fas fa-chevron-right"></i></button>';
+    pagEl.innerHTML = html;
+}
+
+function filterPassagers(q) {
+    pQuery = q.toLowerCase();
+    pPage = 1;
+    renderPassagersPag();
+}
+
+function goToPassagersPage(page) {
+    pPage = page;
+    renderPassagersPag();
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    renderPassagersPag();
+});
+
+/* ========== EXPORT PDF PASSAGERS ========== */
+function exportPassagersPDF() {
+    var { jsPDF } = window.jspdf;
+    if (!jsPDF) {
+        alert("La bibliothèque jsPDF n'est pas chargée.");
+        return;
+    }
+    var doc = new jsPDF('landscape');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(15);
+    doc.text('EcoRide — Liste des Passagers', 14, 16);
+    doc.setFontSize(9); doc.setFont('helvetica', 'normal');
+    doc.text(new Date().toLocaleDateString('fr-FR'), 14, 23);
+    
+    // Récupérer les lignes actuelles (en excluant la ligne vide)
+    var rows = Array.from(document.querySelectorAll('#passagersBody tr:not(.empty-row)'));
+    var bodyData = rows.map(function(row) {
+        var cells = row.querySelectorAll('td');
+        if (cells.length >= 6) {
+            return [
+                cells[0].textContent.trim(),
+                cells[1].textContent.trim(),
+                cells[2].textContent.trim(),
+                cells[3].textContent.trim(),
+                cells[4].textContent.trim(),
+                cells[5].textContent.trim()
+            ];
+        }
+        return [];
+    }).filter(row => row.length > 0);
+
+    doc.autoTable({
+        startY: 28,
+        head: [['ID', 'Nom complet', 'Email', 'Téléphone', 'Statut', "Date d'inscription"]],
+        body: bodyData,
+        styles: { fontSize: 9 },
+        headStyles: { fillColor: [0, 119, 182] },
+        alternateRowStyles: { fillColor: [245, 245, 245] }
+    });
+    doc.save('ecoride_passagers.pdf');
+    if (typeof window.toast === 'function') {
+        window.toast('PDF exporté', true);
+    } else {
+        alert("PDF exporté avec succès !");
+    }
+}
+
+/* ========== FILTRES ÉVÉNEMENTS ========== */
+function filterEvenements(q) {
+    q = q.toLowerCase();
+    document.querySelectorAll('#evenementsBody tr').forEach(row => {
+        row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
+    });
+}
+
 /* ========== THÈME ========== */
 const themeToggle = document.getElementById('themeToggle');
 if (localStorage.getItem('theme') === 'light') {

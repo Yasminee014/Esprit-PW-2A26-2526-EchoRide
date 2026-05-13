@@ -23,7 +23,7 @@ switch ($type) {
         }
         // Sinon depuis la BDD
         try {
-            $db   = Database::getInstance()->getConnection();
+            $db   = Database::getInstance();
             $stmt = $db->prepare("SELECT setting_value FROM app_settings WHERE setting_key = 'ecoride_logo_base64' LIMIT 1");
             $stmt->execute();
             $row = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -44,7 +44,7 @@ switch ($type) {
     case 'user':
         if ($id <= 0) { http_response_code(404); exit; }
         try {
-            $db   = Database::getInstance()->getConnection();
+            $db   = Database::getInstance();
             $stmt = $db->prepare("SELECT photo_data, photo_mime FROM users WHERE id = :id LIMIT 1");
             $stmt->execute([':id' => $id]);
             $row = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -75,7 +75,7 @@ switch ($type) {
     case 'admin':
         if ($id <= 0) { http_response_code(404); exit; }
         try {
-            $db   = Database::getInstance()->getConnection();
+            $db   = Database::getInstance();
             $stmt = $db->prepare("SELECT photo_data, photo_mime FROM admins WHERE id = :id LIMIT 1");
             $stmt->execute([':id' => $id]);
             $row = $stmt->fetch(PDO::FETCH_ASSOC);

@@ -2,6 +2,7 @@
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
+require_once __DIR__ . '/includes/auth_guard.php';
 
 require_once __DIR__ . '/../../Config/Database.php';
 require_once __DIR__ . '/../../Controller/LostFoundFrontController.php';
@@ -816,73 +817,7 @@ $userName = isset($_SESSION['user_name']) ? (string) $_SESSION['user_name'] : 'U
     </style>
 </head>
 <body>
-<nav class="navbar-modern">
-  <a href="http://localhost/index.php" class="logo">
-    <img src="../../assets/images/photo.png" alt="EcoRide Logo" class="logo-img" onerror="this.style.display='none';">
-    <div>
-      <div class="logo-text">ECO RIDE</div>
-      <div class="logo-tagline">Covoiturage Intelligent</div>
-    </div>
-  </a>
-    
-  <button id="menuBtn" class="menu-toggle" onclick="toggleMenu()">
-    <i class="fas fa-bars"></i>
-  </button>
-    
-  <ul class="nav-links" id="navLinks">
-        <li><a href="/ecoride/View/frontoffice/tous_les_trajets.php">Accueil</a></li>
-        <li><a href="/ecoride/View/frontoffice/evenements.php">Événements</a></li>
-        <li><a href="/ecoride/View/frontoffice/sponsors.php">Sponsors</a></li>
-        <li><a href="/ecoride/View/frontoffice/tous_les_trajets.php">Covoiturage</a></li>
-        <li><a href="/ecoride/View/frontoffice/lostfound_front.php">Objets Perdus</a></li>
-        
-    <li class="profile-dropdown">
-      <button class="profile-btn" onclick="toggleProfileDropdown(event)">
-        <div class="profile-avatar">
-          <i class="fas fa-user"></i>
-        </div>
-        <span id="currentUserName">Profil</span>
-        <i class="fas fa-chevron-down"></i>
-      </button>
-      <div class="dropdown-menu" id="profileDropdown">
-        <div class="dropdown-header">
-          <div class="avatar">
-            <i class="fas fa-user"></i>
-          </div>
-          <div class="user-info">
-            <div class="user-name"><?php echo htmlspecialchars($userName); ?></div>
-            <div class="user-role">Membre EcoRide</div>
-          </div>
-        </div>
-                
-        <div class="dropdown-links">
-          <a href="/ecoride/View/frontoffice/user.php"><i class="fas fa-user-circle"></i> Mon profil</a>
-                    <a href="/ecoride/View/frontoffice/tous_les_trajets.php"><i class="fas fa-car"></i> Covoiturages</a>
-          <a href="/ecoride/View/frontoffice/user.php"><i class="fas fa-map-marker-alt"></i> Mes trajets</a>
-          <a href="http://localhost/ecoride/View/frontoffice/mes_vehicules.php"><i class="fas fa-key"></i> Mes véhicules</a>
-          <a href="http://localhost/ecoride/View/frontoffice/mon_historique.php"><i class="fas fa-history"></i> Mon historique</a>
-                    <a href="/ecoride/View/frontoffice/user.php?tab=favoris"><i class="fas fa-heart"></i> Mes favoris</a>
-                                        <a href="/ecoride/View/frontoffice/index.php"><i class="fas fa-exclamation-triangle"></i> Réclamations</a>
-                    <a href="/ecoride/View/frontoffice/mes_objets_perdus.php" class="active"><i class="fas fa-search"></i> Mes objets perdus</a>
-        </div>
-                
-        <div class="dropdown-divider"></div>
-                
-        <div class="dropdown-actions">
-          <a href="http://localhost/ecoride/View/frontoffice/logout.php"><i class="fas fa-sign-out-alt"></i> Déconnexion</a>
-        </div>
-      </div>
-    </li>
-        
-    <li><a href="/ecoride/View/backoffice/admin.php" class="admin-btn">Admin</a></li>
-        
-    <li class="theme-li">
-      <button class="theme-btn" type="button" id="themeToggle" title="Basculer entre noir et blanc" aria-label="Basculer entre noir et blanc" onclick="toggleTheme()">
-        <i class="fas fa-moon"></i>
-      </button>
-    </li>
-  </ul>
-</nav>
+<?php include_once __DIR__ . '/partials/navbar.php'; ?>
 
     <div class="container">
         <!-- HERO -->

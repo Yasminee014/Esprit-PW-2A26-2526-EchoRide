@@ -7,7 +7,7 @@ require_once __DIR__ . '/../Config/Database.php';
 
 final class LostFoundFrontController
 {
-    private const NOTIFICATION_EMAIL = 'abdelmalakgafsi@gmail.com';
+    private const NOTIFICATION_EMAIL = 'charcheriabir18@gmail.com';
 
     private LostFoundProximityService $proximityService;
     private LostFoundFrontRepository $repository;

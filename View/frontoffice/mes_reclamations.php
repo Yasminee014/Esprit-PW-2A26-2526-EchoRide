@@ -2,6 +2,7 @@
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
+require_once __DIR__ . '/includes/auth_guard.php';
 $selected_language = $_GET['lang'] ?? ($_SESSION['lang'] ?? 'fr');
 $selected_language = in_array($selected_language, ['fr', 'en']) ? $selected_language : 'fr';
 $_SESSION['lang'] = $selected_language;

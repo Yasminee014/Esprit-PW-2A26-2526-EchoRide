@@ -430,10 +430,25 @@ if (!isset($resaCounts)) {
 </head>
 <body>
 
-<?php require_once __DIR__ . '/includes/navbar_moderne.php'; ?>
+<?php include_once __DIR__ . '/partials/navbar.php'; ?>
 
 <main class="container">
-    
+
+    <?php if (!empty($_SESSION['success'])): ?>
+        <div style="background:rgba(39,174,96,.12);border:1px solid rgba(39,174,96,.35);color:#d4ffe5;padding:12px 18px;border-radius:10px;margin-bottom:1rem;">
+            <strong><i class="fas fa-check-circle"></i> <?= htmlspecialchars((string)$_SESSION['success']) ?></strong>
+        </div>
+        <?php unset($_SESSION['success']); ?>
+    <?php endif; ?>
+
+    <?php if (!empty($_SESSION['errors']) && is_array($_SESSION['errors'])): ?>
+        <div style="background:rgba(231,76,60,.12);border:1px solid rgba(231,76,60,.35);color:#ffe5e5;padding:12px 18px;border-radius:10px;margin-bottom:1rem;">
+            <strong><i class="fas fa-triangle-exclamation"></i> Erreur :</strong>
+            <ul style="margin:.5rem 0 0 1.2rem"><?php foreach ($_SESSION['errors'] as $e): ?><li><?= htmlspecialchars((string)$e) ?></li><?php endforeach; ?></ul>
+        </div>
+        <?php unset($_SESSION['errors']); ?>
+    <?php endif; ?>
+
     <?php if ($action === 'add'): ?>
         <!-- FORMULAIRE D'AJOUT -->
         <div class="hero-small">

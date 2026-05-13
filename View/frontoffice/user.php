@@ -3,6 +3,13 @@ if (session_status() === PHP_SESSION_NONE) session_start();
 $requestedTab = $_GET['tab'] ?? '';
 $allowedTabs = ['mes-trajets', 'tous-trajets', 'historique', 'favoris'];
 $activeTab = in_array($requestedTab, $allowedTabs, true) ? $requestedTab : 'mes-trajets';
+
+// Récupérer les erreurs de réservation si présentes
+$reservationError = '';
+if (!empty($_SESSION['reservation_error'])) {
+    $reservationError = htmlspecialchars($_SESSION['reservation_error']);
+    unset($_SESSION['reservation_error']);
+}
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -904,7 +911,15 @@ footer {
 <body>
 <script>window.app = window.app || {};</script>
 
-<?php require_once __DIR__ . '/includes/navbar_moderne.php'; ?>
+<?php include_once __DIR__ . '/partials/navbar.php'; ?>
+
+<?php if ($reservationError): ?>
+<div style="background:rgba(231,76,60,.15);border:1px solid rgba(231,76,60,.45);border-radius:12px;padding:.9rem 1.4rem;margin:1rem auto;max-width:900px;color:#e74c3c;display:flex;align-items:center;gap:.8rem;font-size:.9rem;">
+  <i class="fas fa-exclamation-triangle"></i>
+  <span><?= $reservationError ?></span>
+</div>
+<?php endif; ?>
+
 <div class="container">
 
   <!-- HERO -->

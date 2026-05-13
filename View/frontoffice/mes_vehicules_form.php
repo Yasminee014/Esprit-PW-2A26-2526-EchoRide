@@ -1,5 +1,9 @@
 <?php
 if (session_status() === PHP_SESSION_NONE) session_start();
+// Initialiser $vehicule pour éviter des warnings en mode ajout
+$vehicule = $vehicule ?? null;
+$isEditMode = $isEditMode ?? false;
+$mesTrajets = $mesTrajets ?? [];
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -233,7 +237,7 @@ if (session_status() === PHP_SESSION_NONE) session_start();
 </head>
 <body>
 
-<?php require_once __DIR__ . '/includes/navbar_moderne.php'; ?>
+<?php include_once __DIR__ . '/partials/navbar.php'; ?>
 
 <main class="container">
 
@@ -601,10 +605,29 @@ if (session_status() === PHP_SESSION_NONE) session_start();
 
     window.validateField = validateField;
 
+    // Initialiser la validation au chargement
+    document.addEventListener('DOMContentLoaded', function() {
+        initValidation();
+    });
+
     // ═══════════════════════════════════════════════════════════
     // PARTIE 2 — ASSISTANT VOCAL
     // ═══════════════════════════════════════════════════════════
 
     var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) {
-        document.getElementById('voiceW
+        var voiceBtn = document.getElementById('voiceWizBtn');
+        if (voiceBtn) voiceBtn.style.display = 'none';
+    }
+
+    // Initialiser au chargement
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initValidation);
+    } else {
+        initValidation();
+    }
+
+})();
+</script>
+</body>
+</html>

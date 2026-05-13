@@ -3,10 +3,12 @@
 // Ajout du bouton Profil avec menu déroulant
 // Ajout du bouton mode sombre/clair (lune/soleil)
 ?>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 
     /* ========== NAVBAR ========== */
 .navbar-modern {
+    font-family: 'Poppins', sans-serif;
     background: linear-gradient(135deg, #1976D2 0%, #0F3B6E 100%);
     padding: 1.2rem 5%;
     display: flex;
@@ -90,6 +92,7 @@
     border-radius: 30px;
     font-size: 0.9rem;
     font-weight: 500;
+    font-family: 'Poppins', sans-serif;
     transition: all 0.3s;
     display: inline-flex;
     align-items: center;
@@ -411,6 +414,14 @@ body.light-mode .navbar-modern {
 }
 </style>
 
+<?php
+// Build user display info for navbar
+$_navPrenom  = $_SESSION['user_prenom'] ?? '';
+$_navNom     = $_SESSION['user_nom'] ?? '';
+$_navFullName = trim($_navPrenom . ' ' . $_navNom) ?: 'Utilisateur';
+$_navRole    = ucfirst($_SESSION['user_role'] ?? 'Membre');
+$_navPhoto   = !empty($_SESSION['user_photo']) ? '/ecoride/uploads/photos/' . htmlspecialchars($_SESSION['user_photo']) : '';
+?>
 <nav class="navbar-modern">
     <a href="../../../index.php" class="logo">
         <img src="/ecoride/assets/images/photo.png" alt="EcoRide Logo" class="logo-img" onerror="this.style.display='none'">
@@ -426,35 +437,45 @@ body.light-mode .navbar-modern {
     
     <ul class="nav-links" id="navLinks">
         <!-- Bouton Accueil -->
-        <li><a href="/ecoride/View/frontoffice/tous_les_trajets.php" <?= basename($_SERVER['PHP_SELF']) == 'tous_les_trajets.php' ? 'class="active"' : '' ?>>Accueil</a></li>
+        <li><a href="/ecoride/index.php" <?= basename($_SERVER['PHP_SELF']) == 'index.php' && dirname($_SERVER['PHP_SELF']) == '/' . trim(dirname($_SERVER['SCRIPT_NAME']), '/') ? 'class="active"' : '' ?>>Accueil</a></li>
         
-        <li><a href="/ecoride/View/frontoffice/index.php" <?= basename($_SERVER['PHP_SELF']) == 'evenements.php' ? 'class="active"' : '' ?>>Événements</a></li>
-        <li><a href="/ecoride/View/frontoffice/index.php" <?= basename($_SERVER['PHP_SELF']) == 'sponsors.php' ? 'class="active"' : '' ?>>Sponsors</a></li>
+        <li><a href="/ecoride/View/frontoffice/events.php" <?= basename($_SERVER['PHP_SELF']) == 'events.php' ? 'class="active"' : '' ?>>Événements</a></li>
+        <li><a href="/ecoride/View/frontoffice/sponsors.php" <?= basename($_SERVER['PHP_SELF']) == 'sponsors.php' ? 'class="active"' : '' ?>>Sponsors</a></li>
         <li><a href="/ecoride/View/frontoffice/tous_les_trajets.php" <?= in_array(basename($_SERVER['PHP_SELF']), ['tous_les_trajets.php','user.php','reserver_vehicule.php'], true) ? 'class="active"' : '' ?>>Covoiturage</a></li>
         
      <li><a href="/ecoride/View/frontoffice/lostfound_front.php"<?= basename($_SERVER['PHP_SELF']) === 'lostfound_front.php' ? ' class="active"' : '' ?>>Objets Perdus</a></li>
         <li class="profile-dropdown">
             <button type="button" class="profile-btn" onclick="toggleProfileDropdown(event)">
                 <div class="profile-avatar">
-                    <i class="fas fa-user"></i>
+                    <?php if ($_navPhoto): ?>
+                        <img src="<?= $_navPhoto ?>" alt="avatar" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+                        <i class="fas fa-user" style="display:none;"></i>
+                    <?php else: ?>
+                        <i class="fas fa-user"></i>
+                    <?php endif; ?>
                 </div>
-                <span>Profil</span>
+                <span><?= htmlspecialchars($_navPrenom ?: 'Profil') ?></span>
                 <i class="fas fa-chevron-down"></i>
             </button>
             <div class="dropdown-menu" id="profileDropdown">
                 <div class="dropdown-header">
                     <div class="avatar">
-                        <i class="fas fa-user"></i>
+                        <?php if ($_navPhoto): ?>
+                            <img src="<?= $_navPhoto ?>" alt="avatar" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+                            <i class="fas fa-user" style="display:none;"></i>
+                        <?php else: ?>
+                            <i class="fas fa-user"></i>
+                        <?php endif; ?>
                     </div>
                     <div class="user-info">
-                        <div class="user-name">Utilisateur</div>
-                        <div class="user-role">Membre EcoRide</div>
+                        <div class="user-name"><?= htmlspecialchars($_navFullName) ?></div>
+                        <div class="user-role"><?= htmlspecialchars($_navRole) ?></div>
                     </div>
                 </div>
                 
                 <div class="dropdown-links">
                     <!-- NOUVEAU BOUTON MON PROFIL - AJOUTÉ ICI -->
-                    <a href="/ecoride/View/frontoffice/user.php"><i class="fas fa-user-circle"></i> Mon profil</a>
+                    <a href="/ecoride/View/frontoffice/dashboard.php"><i class="fas fa-user-circle"></i> Mon Profil</a>
                     
                     <a href="/ecoride/View/frontoffice/tous_les_trajets.php"><i class="fas fa-car"></i> Covoiturages</a>
                     <a href="/ecoride/View/frontoffice/user.php?tab=mes-trajets"><i class="fas fa-map-marker-alt"></i> Mes trajets</a>
@@ -475,7 +496,7 @@ body.light-mode .navbar-modern {
         </li>
         
         <!-- Bouton Admin -->
-        <li><a href="/ecoride/View/backoffice/admin.php" class="admin-btn">Admin</a></li>
+        <li><a href="<?= BASE_URL ?>Controller/AdminController.php?action=showLogin" class="admin-btn">Admin</a></li>
         
         <li class="theme-li">
             <button class="theme-btn" onclick="toggleTheme()" id="themeBtn">

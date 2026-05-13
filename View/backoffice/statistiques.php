@@ -1,9 +1,9 @@
-<?php
+﻿<?php
 session_start();
 $_SESSION['is_admin'] = true;
 
 try {
-    $pdo = new PDO("mysql:host=localhost;dbname=ecoride", "root", "");
+    $pdo = new PDO("mysql:host=127.0.0.1;port=3307;dbname=ecoride;charset=utf8mb4", "root", "");
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 } catch(PDOException $e) {
     die("Erreur BDD : " . $e->getMessage());
@@ -34,6 +34,16 @@ $evoLabels = array_column($evolution, 'mois');
 $evoData = array_column($evolution, 'count');
 
 $total = array_sum($statutData);
+
+// Charger la photo admin
+if (empty($_SESSION['admin_photo']) && !empty($_SESSION['admin_id'])) {
+    $stmtPhoto = $pdo->prepare("SELECT photo FROM admins WHERE id = :id");
+    $stmtPhoto->execute([':id' => $_SESSION['admin_id']]);
+    $adminRow = $stmtPhoto->fetch(PDO::FETCH_ASSOC);
+    if ($adminRow && !empty($adminRow['photo'])) {
+        $_SESSION['admin_photo'] = $adminRow['photo'];
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -54,7 +64,7 @@ body::after{content:'';position:fixed;inset:0;background:linear-gradient(130deg,
 .sidebar{width:280px;background:linear-gradient(180deg,#2F76BC 0%,#1E5EA5 50%,#174C8A 100%);padding:1.5rem 0;position:fixed;top:0;left:0;height:100vh;overflow-y:auto;z-index:100;box-shadow:4px 0 20px rgba(0,0,0,.2);display:flex;flex-direction:column;}
 .sidebar-header{padding:1.5rem;border-bottom:1px solid rgba(255,255,255,.15);margin-bottom:1.5rem;text-align:center;}
 .sidebar-header .logo{display:flex;flex-direction:column;align-items:center;gap:6px;text-decoration:none;}
-.sidebar-header .logo-img{width:72px;height:72px;border-radius:18px;background:rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;color:#fff;font-size:1.5rem;box-shadow:0 8px 20px rgba(0,0,0,.15);}
+.sidebar-header .logo-img{width:80px;height:80px;object-fit:contain;filter:drop-shadow(0 4px 14px rgba(97,179,250,.5));margin-bottom:4px;}
 .sidebar-header .logo-text{font-size:1.3rem;font-weight:700;color:#A9D6FF;letter-spacing:1px;}
 .sidebar-header .logo-tagline{font-size:0.75rem;color:#BFD8F1;margin-top:2px;letter-spacing:1px;opacity:.85;}
 .nav-section{color:#CFE6FF;font-size:0.7rem;text-transform:uppercase;letter-spacing:2px;padding:.75rem 1.5rem;margin-top:0.5rem;opacity:.8;font-weight:600;}
@@ -80,8 +90,9 @@ body::after{content:'';position:fixed;inset:0;background:linear-gradient(130deg,
 .admin-nav .lang-form{display:flex;align-items:center;}
 .admin-nav .profile-btn{background:#003050;color:#FFFFFF;display:flex;align-items:center;gap:10px;padding:0.5rem 1.2rem;border-radius:30px;text-decoration:none;}
 .admin-nav .profile-btn:hover{background:#002050;transform:translateY(-2px);}
-.profile-avatar{width:28px;height:28px;background:#5FA8FF;border-radius:50%;display:flex;align-items:center;justify-content:center;}
+.profile-avatar{width:28px;height:28px;background:#5FA8FF;border-radius:50%;display:flex;align-items:center;justify-content:center;overflow:hidden;}
 .profile-avatar i{font-size:0.8rem;color:#FFFFFF;}
+.profile-avatar img{width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;}
 .admin-nav .admin-btn{background:rgba(231,76,60,0.2);border:1px solid rgba(231,76,60,0.4);color:#e74c3c;}
 .admin-nav .admin-btn:hover{background:rgba(231,76,60,0.35);}
 .theme-btn{background:rgba(255,255,255,0.1);border:none;width:38px;height:38px;border-radius:50%;cursor:pointer;font-size:1.1rem;transition:all 0.3s;display:flex;align-items:center;justify-content:center;color:white;}
@@ -113,7 +124,7 @@ body.light-mode .footer{color:#666;}
     <aside class="sidebar">
         <div class="sidebar-header">
             <a href="/ecoride/View/backoffice/admin.php" class="logo">
-                <div class="logo-img"><i class="fas fa-shield-alt"></i></div>
+                <img src="/ecoride/assets/images/photo.png" alt="EcoRide Logo" class="logo-img">
                 <div class="logo-text">EcoRide</div>
                 <div class="logo-tagline">ADMINISTRATION</div>
             </a>
@@ -125,7 +136,7 @@ body.light-mode .footer{color:#666;}
                 <li><a href="/ecoride/View/backoffice/admin_trajet.php?page=passagers"><i class="fas fa-users"></i> Passagers</a></li>
                 <li><a href="/ecoride/View/backoffice/admin_trajet.php?page=trajets"><i class="fas fa-route"></i> Trajets</a></li>
                 <li><a href="/ecoride/View/backoffice/admin_trajet.php?page=destinations"><i class="fas fa-map-pin"></i> Destinations</a></li>
-                <li><a href="/ecoride/View/backoffice/admin_trajet.php?page=evenements"><i class="fas fa-calendar-alt"></i> Événements</a></li>
+                <li><a href="/ecoride/View/backoffice/dashboard_event.php"><i class="fas fa-calendar-alt"></i> Événements</a></li>
                 <li><a href="/ecoride/View/backoffice/admin_reclamations.php"><i class="fas fa-exclamation-triangle"></i> Réclamations</a></li>
                 <li><a href="/ecoride/View/backoffice/admin.php"><i class="fas fa-car"></i> Véhicules</a></li>
                 <li><a href="/ecoride/View/backoffice/lostfound_admin.php"><i class="fas fa-search-location"></i> Objets perdus</a></li>
@@ -146,11 +157,18 @@ body.light-mode .footer{color:#666;}
             </div>
             <div class="admin-nav">
                 <a href="/ecoride/View/frontoffice/tous_les_trajets.php">Voir site</a>
-                <a href="profil.php" class="profile-btn">
-                    <div class="profile-avatar"><i class="fas fa-user"></i></div>
+                <a href="/ecoride/Controller/AdminController.php?action=showProfile" class="profile-btn">
+                    <div class="profile-avatar">
+                        <?php if (!empty($_SESSION['admin_photo'])): ?>
+                            <img src="/ecoride/uploads/photos/<?= htmlspecialchars($_SESSION['admin_photo']) ?>" alt="Photo admin" onerror="this.onerror=null;this.style.display='none';this.nextElementSibling.style.display='flex';">
+                            <i class="fas fa-user-shield" style="display:none"></i>
+                        <?php else: ?>
+                            <i class="fas fa-user-shield"></i>
+                        <?php endif; ?>
+                    </div>
                     <span>Profil</span>
                 </a>
-                <a href="/ecoride/View/backoffice/admin_reclamations.php" class="admin-btn">Réclamations</a>
+                <a href="/ecoride/View/backoffice/admin.php" class="admin-btn">Admin</a>
                 <button class="theme-btn" onclick="toggleTheme()" id="themeToggle">
                     <i class="fas fa-moon"></i>
                 </button>

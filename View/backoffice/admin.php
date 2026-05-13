@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // ══════════════════════════════════════════════
 //  ADMIN.PHP — Page admin unique EcoRide
 //  Affichage des véhicules + historique par véhicule
@@ -14,7 +14,20 @@ $rModel       = new ReservationModel();
 
 // Force admin mode for testing (remove in production)
 $_SESSION['is_admin'] = true;
-$_SESSION['user_id'] = 1;
+$_SESSION['user_id']  = $_SESSION['user_id']  ?? 1;
+$_SESSION['admin_id'] = $_SESSION['admin_id'] ?? 1;
+$_SESSION['admin_nom']   = $_SESSION['admin_nom']   ?? 'Admin';
+$_SESSION['admin_email'] = $_SESSION['admin_email'] ?? 'admin@ecoride.fr';
+
+// Charger la photo admin depuis la BDD
+if (empty($_SESSION['admin_photo'])) {
+    $stmtPhoto = $db->prepare("SELECT photo FROM admins WHERE id = :id");
+    $stmtPhoto->execute([':id' => $_SESSION['admin_id']]);
+    $adminRow = $stmtPhoto->fetch(PDO::FETCH_ASSOC);
+    if ($adminRow && !empty($adminRow['photo'])) {
+        $_SESSION['admin_photo'] = $adminRow['photo'];
+    }
+}
 
 // ─── Recherche ────────────────────────────────
 $search   = trim($_GET['search'] ?? '');
@@ -300,17 +313,27 @@ body{font-family:'Poppins',sans-serif;background:linear-gradient(135deg,var(--da
 }
 
 .profile-avatar {
-    width: 28px;
-    height: 28px;
+    width: 36px;
+    height: 36px;
     background: #5FA8FF;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
+    overflow: hidden;
+    flex-shrink: 0;
+    border: 2px solid rgba(255,255,255,0.3);
+}
+
+.profile-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
 }
 
 .profile-avatar i {
-    font-size: 0.8rem;
+    font-size: 0.9rem;
     color: #FFFFFF;
 }
 
@@ -506,11 +529,11 @@ body.light-mode .stat { background: white; }
     <div class="nav-section">GESTION</div>
     <nav>
         <ul>
-            <li><a href="admin.php"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
+            <li><a href="admin_dashboard.php"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
             <li><a href="admin_trajet.php?page=passagers"><i class="fas fa-users"></i> Passagers</a></li>
             <li><a href="admin_trajet.php?page=trajets"><i class="fas fa-route"></i> Trajets</a></li>
             <li><a href="admin_trajet.php?page=destinations"><i class="fas fa-map-pin"></i> Destinations</a></li>
-            <li><a href="admin_trajet.php?page=evenements"><i class="fas fa-calendar-alt"></i> Événements</a></li>
+            <li><a href="dashboard_event.php"><i class="fas fa-calendar-alt"></i> Événements</a></li>
             <li><a href="/ecoride/View/backoffice/admin_reclamations.php"><i class="fas fa-exclamation-triangle"></i> Réclamations</a></li>
             <li><a href="admin.php" class="active"><i class="fas fa-car"></i> Véhicules</a></li>
             <li><a href="lostfound_admin.php"><i class="fas fa-search-location"></i> Objets perdus</a></li>
@@ -536,9 +559,14 @@ body.light-mode .stat { background: white; }
         <a href="/ecoride/View/frontoffice/tous_les_trajets.php">Voir site</a>
         
         <!-- BOUTON PROFIL -->
-        <a href="profil.php" class="profile-btn">
+        <a href="../../Controller/AdminController.php?action=showProfile" class="profile-btn">
             <div class="profile-avatar">
-                <i class="fas fa-user"></i>
+                <?php if (!empty($_SESSION['admin_photo'])): ?>
+                    <img src="../../uploads/photos/<?= htmlspecialchars($_SESSION['admin_photo']) ?>" alt="Photo admin" onerror="this.onerror=null;this.style.display='none';this.nextElementSibling.style.display='flex';">
+                    <i class="fas fa-user-shield" style="display:none"></i>
+                <?php else: ?>
+                    <i class="fas fa-user-shield"></i>
+                <?php endif; ?>
             </div>
             <span>Profil</span>
         </a>
