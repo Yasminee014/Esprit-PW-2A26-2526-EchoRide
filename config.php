@@ -13,7 +13,7 @@ define('DB_CHARSET', 'utf8mb4');
 
 // ─── GROQ API KEY (pour AI Helper et EcoBot) ──────────
 // Obtenez votre clé gratuite sur : https://console.groq.com
-define('GROQ_API_KEY', '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');
+define('GROQ_API_KEY', 'YOUR_GROQ_API_KEY_HERE');
 
 // ─── CONSTANTES CHEMINS ────────────────────────────────────
 define('BASE_URL', 'http://localhost/projetadmin/');

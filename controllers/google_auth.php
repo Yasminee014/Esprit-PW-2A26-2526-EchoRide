@@ -12,8 +12,8 @@ require_once __DIR__ . '/../config.php';
 // 3. URI de redirection autorisée : http://localhost/projetadmin/controllers/google_auth.php
 // 4. Remplacez les valeurs ci-dessous par vos vraies clés
 
-define('GOOGLE_CLIENT_ID',     '356236064828-cv47pjl584q0cg7richtrtdoqgvkt6dn.apps.googleusercontent.com');
-define('GOOGLE_CLIENT_SECRET', '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');
+define('GOOGLE_CLIENT_ID',     'YOUR_GOOGLE_CLIENT_ID_HERE');
+define('GOOGLE_CLIENT_SECRET', 'YOUR_GOOGLE_CLIENT_SECRET_HERE');
 define('GOOGLE_REDIRECT_URI',  BASE_URL . 'controllers/google_auth.php');
 
 // ─── ÉTAPE 1 : Rediriger vers Google ────────────────────────
